@@ -1,0 +1,93 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "triggers": {
+            "manual": {
+                "type": "Request",
+                "kind": "Http"
+            }
+        },
+        "actions": {
+            "Transform_XML": {
+                "runAfter": {
+                    "Flat_File_Decoding": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Xslt",
+                "inputs": {
+                    "content": "@body('Flat_File_Decoding')\n",
+                    "integrationAccount": {
+                        "map": {
+                            "name": "CsvToX12_850"
+                        }
+                    }
+                }
+            },
+            "Encode_to_X12_message_by_agreement_name_(V2)": {
+                "runAfter": {
+                    "Transform_XML": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['x12']['connectionId']"
+                        }
+                    },
+                    "method": "post",
+                    "body": "@body('Transform_XML')",
+                    "path": "/EncodeV2/ResolveByName",
+                    "queries": {
+                        "agreementName": "ContosoRetail_To_FabrikamSupplies_X12"
+                    }
+                }
+            },
+            "Response": {
+                "runAfter": {
+                    "Encode_to_X12_message_by_agreement_name_(V2)": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Response",
+                "inputs": {
+                    "statusCode": 200,
+                    "body": "@body('Encode_to_X12_message_by_agreement_name_(V2)')"
+                }
+            },
+            "Flat_File_Decoding": {
+                "runAfter": {},
+                "type": "FlatFileDecoding",
+                "inputs": {
+                    "content": "@\ntriggerBody()['$multipart'][0]['body']",
+                    "integrationAccount": {
+                        "schema": {
+                            "name": "orders-flatfile"
+                        }
+                    }
+                }
+            }
+        },
+        "parameters": {
+            "$connections": {
+                "type": "Object",
+                "defaultValue": {}
+            }
+        }
+    },
+    "parameters": {
+        "$connections": {
+            "type": "Object",
+            "value": {
+                "x12": {
+                    "id": "/subscriptions/20cda7f0-c25d-4fc3-a336-2726df50af21/providers/Microsoft.Web/locations/uksouth/managedApis/x12",
+                    "connectionId": "/subscriptions/20cda7f0-c25d-4fc3-a336-2726df50af21/resourceGroups/CSV-to-X12-Blob-Processor_group/providers/Microsoft.Web/connections/x12",
+                    "connectionName": "x12",
+                    "connectionProperties": {}
+                }
+            }
+        }
+    }
+}

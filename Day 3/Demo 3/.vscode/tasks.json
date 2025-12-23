@@ -1,0 +1,27 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "func: start Day 3 Demo 3",
+      "type": "shell",
+      "command": "func",
+      "args": [
+        "start"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "languageWorkers__python__arguments": "-m debugpy --listen 9091 --wait-for-client",
+          "languageWorkers__python__defaultExecutablePath": "${workspaceFolder}/venv/bin/python",
+          "AzureWebJobsScriptRoot": "${workspaceFolder}"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      },
+      "problemMatcher": "$func-watch",
+      "isBackground": true
+    }
+  ]
+}

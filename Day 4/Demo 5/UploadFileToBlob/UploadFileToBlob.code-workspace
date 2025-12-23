@@ -1,0 +1,17 @@
+{
+  "folders": [
+    {
+      "name": "UploadFileToBlobLogicApp",
+      "path": "./UploadFileToBlobLogicApp"
+    }
+  ],
+  "settings": {
+    "terminal.integrated.env.osx": {
+      "PATH": "/Users/trainer/.azurelogicapps/dependencies/DotNetSDK:${env:PATH}"
+    },
+    "omnisharp.dotNetCliPaths": [
+      "/Users/trainer/.azurelogicapps/dependencies/DotNetSDK"
+    ],
+    "debug.internalConsoleOptions": "neverOpen"
+  }
+}

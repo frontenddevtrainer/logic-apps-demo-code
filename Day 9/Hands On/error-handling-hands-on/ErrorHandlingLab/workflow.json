@@ -1,0 +1,278 @@
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "$connections": {
+        "type": "Object",
+        "defaultValue": {}
+      },
+      "notificationEmail": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "loggerFunctionUrl": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "loggerFunctionKey": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "triggers": {
+      "When_a_HTTP_request_is_received": {
+        "type": "Request",
+        "kind": "Http",
+        "inputs": {
+          "method": "POST",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "orderId": {
+                "type": "string"
+              },
+              "simulateFailure": {
+                "type": "boolean"
+              },
+              "customerEmail": {
+                "type": "string"
+              },
+              "sourceSystem": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "actions": {
+      "Scope_Try": {
+        "type": "Scope",
+        "runAfter": {},
+        "trackedProperties": {
+          "correlationId": "@workflow().run.name",
+          "orderId": "@coalesce(triggerBody()?['orderId'], 'missing')",
+          "sourceSystem": "@coalesce(triggerBody()?['sourceSystem'], 'api')",
+          "simulateFailure": "@string(coalesce(triggerBody()?['simulateFailure'], false))"
+        },
+        "actions": {
+          "Compose_Request_Context": {
+            "type": "Compose",
+            "inputs": {
+              "correlationId": "@workflow().run.name",
+              "orderId": "@triggerBody()?['orderId']",
+              "simulateFailure": "@coalesce(triggerBody()?['simulateFailure'], false)",
+              "customerEmail": "@triggerBody()?['customerEmail']",
+              "sourceSystem": "@coalesce(triggerBody()?['sourceSystem'], 'api')"
+            }
+          },
+          "Validate_Request": {
+            "type": "If",
+            "expression": "@or(equals(toLower(string(outputs('Compose_Request_Context')?['simulateFailure'])), 'true'), empty(outputs('Compose_Request_Context')?['orderId']))",
+            "actions": {
+              "Terminate_Invalid_Request": {
+                "type": "Terminate",
+                "inputs": {
+                  "runStatus": "Failed",
+                  "runError": {
+                    "code": "InvalidRequest",
+                    "message": "orderId is required or simulateFailure was set."
+                  }
+                }
+              }
+            },
+            "else": {
+              "actions": {
+                "Compose_Processing_Result": {
+                  "type": "Compose",
+                  "inputs": "@concat('Processed order ', outputs('Compose_Request_Context')?['orderId'])"
+                }
+              }
+            },
+            "runAfter": {
+              "Compose_Request_Context": [
+                "Succeeded"
+              ]
+            }
+          }
+        }
+      },
+      "Scope_Catch": {
+        "type": "Scope",
+        "runAfter": {
+          "Scope_Try": [
+            "Failed",
+            "TimedOut"
+          ]
+        },
+        "trackedProperties": {
+          "correlationId": "@workflow().run.name",
+          "orderId": "@coalesce(triggerBody()?['orderId'], 'missing')",
+          "scope": "catch"
+        },
+        "actions": {
+          "Compose_Error_Summary": {
+            "type": "Compose",
+            "inputs": {
+              "correlationId": "@workflow().run.name",
+              "orderId": "@coalesce(triggerBody()?['orderId'], 'missing')",
+              "sourceSystem": "@coalesce(triggerBody()?['sourceSystem'], 'api')",
+              "status": "@actions('Scope_Try')?['status']",
+              "error": "@actions('Scope_Try')?['error']",
+              "failedAt": "@utcNow()"
+            }
+          },
+          "Log_Error_to_App_Insights": {
+            "type": "Http",
+            "runAfter": {
+              "Compose_Error_Summary": [
+                "Succeeded"
+              ]
+            },
+            "trackedProperties": {
+              "correlationId": "@workflow().run.name",
+              "orderId": "@coalesce(triggerBody()?['orderId'], 'missing')",
+              "logType": "trackException"
+            },
+            "inputs": {
+              "method": "POST",
+              "uri": "@parameters('loggerFunctionUrl')",
+              "headers": {
+                "Content-Type": "application/json",
+                "x-functions-key": "@parameters('loggerFunctionKey')"
+              },
+              "body": {
+                "eventName": "LogicAppFailure",
+                "correlationId": "@workflow().run.name",
+                "properties": {
+                  "workflowName": "@workflow().name",
+                  "workflowId": "@workflow().id",
+                  "orderId": "@coalesce(triggerBody()?['orderId'], 'missing')",
+                  "sourceSystem": "@coalesce(triggerBody()?['sourceSystem'], 'api')",
+                  "errorCode": "@actions('Scope_Try')?['error']?['code']",
+                  "errorMessage": "@actions('Scope_Try')?['error']?['message']"
+                },
+                "exceptionMessage": "@actions('Scope_Try')?['error']?['message']",
+                "exceptionType": "@coalesce(actions('Scope_Try')?['error']?['code'], 'WorkflowFailure')",
+                "severityLevel": 3
+              }
+            }
+          },
+          "Send_failure_notification": {
+            "type": "ApiConnection",
+            "runAfter": {
+              "Log_Error_to_App_Insights": [
+                "Succeeded",
+                "Failed"
+              ]
+            },
+            "inputs": {
+              "host": {
+                "connection": {
+                  "referenceName": "@parameters('$connections')['office365']['connectionId']"
+                }
+              },
+              "method": "post",
+              "path": "/v2/Mail",
+              "body": {
+                "importance": "High",
+                "subject": "Workflow failure: @{coalesce(triggerBody()?['orderId'], 'missing')}",
+                "body": {
+                  "contentType": "HTML",
+                  "content": "<p><strong>Workflow:</strong> @{workflow().name}</p><p><strong>Correlation:</strong> @{workflow().run.name}</p><p><strong>Order:</strong> @{coalesce(triggerBody()?['orderId'], 'missing')}</p><p><strong>Error:</strong> @{actions('Scope_Try')?['error']?['message']}</p>"
+                },
+                "to": [
+                  {
+                    "emailAddress": {
+                      "address": "@{parameters('notificationEmail')}"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      "Scope_Finally": {
+        "type": "Scope",
+        "runAfter": {
+          "Scope_Try": [
+            "Succeeded",
+            "Failed",
+            "TimedOut"
+          ],
+          "Scope_Catch": [
+            "Succeeded",
+            "Failed",
+            "Skipped"
+          ]
+        },
+        "trackedProperties": {
+          "correlationId": "@workflow().run.name",
+          "scope": "finally"
+        },
+        "actions": {
+          "Compose_Final_Status": {
+            "type": "Compose",
+            "inputs": {
+              "finishedAt": "@utcNow()",
+              "tryStatus": "@actions('Scope_Try')?['status']"
+            }
+          }
+        }
+      },
+      "Response_Success": {
+        "type": "Response",
+        "runAfter": {
+          "Scope_Try": [
+            "Succeeded"
+          ],
+          "Scope_Finally": [
+            "Succeeded"
+          ]
+        },
+        "inputs": {
+          "statusCode": 200,
+          "body": {
+            "status": "ok",
+            "correlationId": "@workflow().run.name"
+          }
+        }
+      },
+      "Response_Failure": {
+        "type": "Response",
+        "runAfter": {
+          "Scope_Catch": [
+            "Succeeded",
+            "Failed"
+          ],
+          "Scope_Finally": [
+            "Succeeded"
+          ]
+        },
+        "inputs": {
+          "statusCode": 500,
+          "body": {
+            "status": "failed",
+            "correlationId": "@workflow().run.name",
+            "error": "@actions('Scope_Try')?['error']"
+          }
+        }
+      }
+    },
+    "outputs": {}
+  },
+  "kind": "Stateful",
+  "parameters": {
+    "notificationEmail": {
+      "value": "@appsetting('notificationEmail')"
+    },
+    "loggerFunctionUrl": {
+      "value": "@appsetting('loggerFunctionUrl')"
+    },
+    "loggerFunctionKey": {
+      "value": "@appsetting('loggerFunctionKey')"
+    }
+  }
+}

@@ -1,0 +1,171 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "contentVersion": "1.0.0.0",
+        "triggers": {
+            "manual": {
+                "type": "Request",
+                "kind": "Http",
+                "inputs": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "x12Message": {
+                                "type": "string",
+                                "description": "Raw X12 850 Purchase Order message to acknowledge"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "actions": {
+            "Decode_X12_message": {
+                "runAfter": {},
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['x12']['connectionId']"
+                        }
+                    },
+                    "method": "post",
+                    "body": "@triggerBody()?['x12Message']",
+                    "path": "/decode"
+                }
+            },
+            "Parse_Decoded_Message": {
+                "runAfter": {
+                    "Decode_X12_message": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ParseJson",
+                "inputs": {
+                    "content": "@body('Decode_X12_message')",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "ISA": {
+                                "type": "object"
+                            },
+                            "GS": {
+                                "type": "object"
+                            },
+                            "ST": {
+                                "type": "object"
+                            }
+                        }
+                    }
+                }
+            },
+            "Extract_Control_Numbers": {
+                "runAfter": {
+                    "Parse_Decoded_Message": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Compose",
+                "inputs": {
+                    "interchangeControlNumber": "@body('Parse_Decoded_Message')?['ISA']?['ISA13']",
+                    "functionalGroupControlNumber": "@body('Parse_Decoded_Message')?['GS']?['GS06']",
+                    "transactionSetControlNumber": "@body('Parse_Decoded_Message')?['ST']?['ST02']",
+                    "senderId": "@body('Parse_Decoded_Message')?['ISA']?['ISA06']",
+                    "receiverId": "@body('Parse_Decoded_Message')?['ISA']?['ISA08']",
+                    "functionalGroupId": "@body('Parse_Decoded_Message')?['GS']?['GS01']",
+                    "transactionSetId": "@body('Parse_Decoded_Message')?['ST']?['ST01']"
+                }
+            },
+            "Build_997_Acknowledgment_XML": {
+                "runAfter": {
+                    "Extract_Control_Numbers": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Compose",
+                "inputs": "<X12Interchange xmlns=\"http://schemas.microsoft.com/BizTalk/EDI/X12/2006\">\n  <ISA>\n    <ISA01>00</ISA01>\n    <ISA02>          </ISA02>\n    <ISA03>00</ISA03>\n    <ISA04>          </ISA04>\n    <ISA05>ZZ</ISA05>\n    <ISA06>@{outputs('Extract_Control_Numbers')?['receiverId']}</ISA06>\n    <ISA07>ZZ</ISA07>\n    <ISA08>@{outputs('Extract_Control_Numbers')?['senderId']}</ISA08>\n    <ISA09>@{formatDateTime(utcNow(), 'yyMMdd')}</ISA09>\n    <ISA10>@{formatDateTime(utcNow(), 'HHmm')}</ISA10>\n    <ISA11>U</ISA11>\n    <ISA12>00401</ISA12>\n    <ISA13>@{outputs('Extract_Control_Numbers')?['interchangeControlNumber']}</ISA13>\n    <ISA14>0</ISA14>\n    <ISA15>P</ISA15>\n    <ISA16>:</ISA16>\n  </ISA>\n  <FunctionalGroup>\n    <GS>\n      <GS01>FA</GS01>\n      <GS02>@{outputs('Extract_Control_Numbers')?['receiverId']}</GS02>\n      <GS03>@{outputs('Extract_Control_Numbers')?['senderId']}</GS03>\n      <GS04>@{formatDateTime(utcNow(), 'yyyyMMdd')}</GS04>\n      <GS05>@{formatDateTime(utcNow(), 'HHmm')}</GS05>\n      <GS06>@{outputs('Extract_Control_Numbers')?['functionalGroupControlNumber']}</GS06>\n      <GS07>X</GS07>\n      <GS08>004010</GS08>\n    </GS>\n    <TransactionSet>\n      <ST>\n        <ST01>997</ST01>\n        <ST02>0001</ST02>\n      </ST>\n      <AK1>\n        <AK101>@{outputs('Extract_Control_Numbers')?['functionalGroupId']}</AK101>\n        <AK102>@{outputs('Extract_Control_Numbers')?['functionalGroupControlNumber']}</AK102>\n      </AK1>\n      <AK2Loop1>\n        <AK2>\n          <AK201>@{outputs('Extract_Control_Numbers')?['transactionSetId']}</AK201>\n          <AK202>@{outputs('Extract_Control_Numbers')?['transactionSetControlNumber']}</AK202>\n        </AK2>\n        <AK5>\n          <AK501>A</AK501>\n        </AK5>\n      </AK2Loop1>\n      <AK9>\n        <AK901>A</AK901>\n        <AK902>1</AK902>\n        <AK903>1</AK903>\n        <AK904>1</AK904>\n      </AK9>\n      <SE>\n        <SE01>6</SE01>\n        <SE02>0001</SE02>\n      </SE>\n    </TransactionSet>\n    <GE>\n      <GE01>1</GE01>\n      <GE02>@{outputs('Extract_Control_Numbers')?['functionalGroupControlNumber']}</GE02>\n    </GE>\n  </FunctionalGroup>\n  <IEA>\n    <IEA01>1</IEA01>\n    <IEA02>@{outputs('Extract_Control_Numbers')?['interchangeControlNumber']}</IEA02>\n  </IEA>\n</X12Interchange>"
+            },
+            "Encode_997_to_X12": {
+                "runAfter": {
+                    "Build_997_Acknowledgment_XML": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['x12']['connectionId']"
+                        }
+                    },
+                    "method": "post",
+                    "body": "@outputs('Build_997_Acknowledgment_XML')",
+                    "path": "/EncodeV2/ResolveByName",
+                    "queries": {
+                        "agreementName": "FabrikamSupplies_To_ContosoRetail_X12_997"
+                    }
+                }
+            },
+            "Format_997_Response": {
+                "runAfter": {
+                    "Encode_997_to_X12": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Compose",
+                "inputs": {
+                    "acknowledgmentStatus": "generated",
+                    "acknowledgmentType": "997_FunctionalAcknowledgment",
+                    "timestamp": "@utcNow()",
+                    "originalMessage": {
+                        "interchangeControlNumber": "@outputs('Extract_Control_Numbers')?['interchangeControlNumber']",
+                        "functionalGroupControlNumber": "@outputs('Extract_Control_Numbers')?['functionalGroupControlNumber']",
+                        "transactionSetControlNumber": "@outputs('Extract_Control_Numbers')?['transactionSetControlNumber']",
+                        "senderId": "@outputs('Extract_Control_Numbers')?['senderId']",
+                        "receiverId": "@outputs('Extract_Control_Numbers')?['receiverId']"
+                    },
+                    "acknowledgmentStatus": {
+                        "code": "A",
+                        "description": "Accepted"
+                    },
+                    "x12_997_Message": "@{body('Encode_997_to_X12')}"
+                }
+            },
+            "Response": {
+                "runAfter": {
+                    "Format_997_Response": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Response",
+                "inputs": {
+                    "statusCode": 200,
+                    "headers": {
+                        "Content-Type": "application/json"
+                    },
+                    "body": "@outputs('Format_997_Response')"
+                }
+            }
+        },
+        "outputs": {},
+        "parameters": {
+            "$connections": {
+                "type": "Object",
+                "defaultValue": {}
+            }
+        }
+    },
+    "parameters": {
+        "$connections": {
+            "type": "Object",
+            "value": {
+                "x12": {
+                    "id": "/subscriptions/20cda7f0-c25d-4fc3-a336-2726df50af21/providers/Microsoft.Web/locations/uksouth/managedApis/x12",
+                    "connectionId": "/subscriptions/20cda7f0-c25d-4fc3-a336-2726df50af21/resourceGroups/CSV-to-X12-Blob-Processor_group/providers/Microsoft.Web/connections/x12",
+                    "connectionName": "x12",
+                    "connectionProperties": {}
+                }
+            }
+        }
+    }
+}

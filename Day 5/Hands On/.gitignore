@@ -1,0 +1,12 @@
+# Azure credentials and connection details
+*.creds
+*.key
+*.pem
+
+# Test output
+*.log
+test-output/
+
+# OS files
+.DS_Store
+Thumbs.db

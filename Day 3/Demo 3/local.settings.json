@@ -1,0 +1,20 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "PG_HOST": "<your-postgresql-host>.postgres.database.azure.com",
+    "PG_DB": "<database-name>",
+    "PG_USER": "<username>",
+    "PG_PASSWORD": "<password>",
+    "PG_PORT": "5432",
+    "PG_SSLMODE": "require",
+    "PG_CONNECT_TIMEOUT": "10",
+    "PG_ACTION_MAX_ATTEMPTS": "4",
+    "PG_ACTION_BASE_DELAY_SECONDS": "1.5",
+    "PG_ACTION_MAX_DELAY_SECONDS": "15",
+    "HOST_MAX_RETRY_ATTEMPTS": "3",
+    "HOST_RETRY_DELAY_SECONDS": "5",
+    "HOST_MAX_RETRY_DELAY_SECONDS": "20"
+  }
+}

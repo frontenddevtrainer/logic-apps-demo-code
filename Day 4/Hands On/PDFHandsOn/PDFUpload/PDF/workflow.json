@@ -1,0 +1,129 @@
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "$connections": {
+        "type": "Object",
+        "defaultValue": {}
+      },
+      "incomingContainer": {
+        "type": "String",
+        "defaultValue": "incoming"
+      },
+      "pdfProcessorFunctionUrl": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "pdfProcessorAudience": {
+        "type": "String",
+        "defaultValue": ""
+      },
+      "notificationEmail": {
+        "type": "String",
+        "defaultValue": ""
+      }
+    },
+    "triggers": {
+      "When_a_blob_is_added_or_modified_(properties_only)": {
+        "type": "ApiConnection",
+        "recurrence": {
+          "frequency": "Minute",
+          "interval": 1
+        },
+        "inputs": {
+          "host": {
+            "connection": {
+              "referenceName": "@parameters('$connections')['azureblob']['connectionId']"
+            }
+          },
+          "method": "get",
+          "path": "/v2/datasets/default/blobServices/default/containers/@{encodeURIComponent(parameters('incomingContainer'))}/blobs",
+          "queries": {
+            "checkEvery": "PT1M",
+            "includeSnapshots": false
+          }
+        }
+      }
+    },
+    "actions": {
+      "Process_new_PDF": {
+        "type": "If",
+        "runAfter": {},
+        "expression": {
+          "equals": [
+            "@toLower(last(split(triggerBody()?['Name'], '.')))",
+            "pdf"
+          ]
+        },
+        "actions": {
+          "Call_PDF_Processor": {
+            "type": "Http",
+            "runAfter": {},
+            "inputs": {
+              "method": "POST",
+              "uri": "@{parameters('pdfProcessorFunctionUrl')}",
+              "authentication": {
+                "type": "ManagedServiceIdentity",
+                "audience": "@{parameters('pdfProcessorAudience')}"
+              },
+              "headers": {
+                "Content-Type": "application/json"
+              },
+              "body": {
+                "blobName": "@{triggerBody()?['Name']}",
+                "correlationId": "@{workflow().run.name}"
+              }
+            }
+          },
+          "Send_completion_notification": {
+            "type": "ApiConnection",
+            "runAfter": {
+              "Call_PDF_Processor": [
+                "Succeeded"
+              ]
+            },
+            "inputs": {
+              "host": {
+                "connection": {
+                  "referenceName": "@parameters('$connections')['office365']['connectionId']"
+                }
+              },
+              "method": "post",
+              "path": "/v2/Mail",
+              "body": {
+                "importance": "Normal",
+                "subject": "PDF processed: @{triggerBody()?['Name']}",
+                "body": {
+                  "contentType": "HTML",
+                  "content": "<p>The PDF <strong>@{triggerBody()?['Name']}</strong> has been processed.</p><p>Text blob: @{body('Call_PDF_Processor')?['processedBlob']}</p><p>Archived in container: @{body('Call_PDF_Processor')?['archiveContainer']}.</p>"
+                },
+                "to": [
+                  {
+                    "emailAddress": {
+                      "address": "@{parameters('notificationEmail')}"
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "else": {}
+      }
+    },
+    "outputs": {}
+  },
+  "kind": "Stateful",
+  "parameters": {
+    "pdfProcessorFunctionUrl": {
+      "value": "@appsetting('pdfProcessorFunctionUrl')"
+    },
+    "pdfProcessorAudience": {
+      "value": "@appsetting('pdfProcessorAudience')"
+    },
+    "notificationEmail": {
+      "value": "@appsetting('notificationEmail')"
+    }
+  }
+}

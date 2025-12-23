@@ -1,0 +1,588 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "contentVersion": "1.0.0.0",
+        "triggers": {
+            "Receive_Csv_File": {
+                "type": "Request",
+                "kind": "Http",
+                "inputs": {
+                    "method": "POST",
+                    "schema": {
+                        "type": "string",
+                        "description": "Raw CSV payload in the request body"
+                    }
+                }
+            }
+        },
+        "actions": {
+            "Initialize_Source_File_Name": {
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "SourceFileName",
+                            "type": "String",
+                            "value": "@coalesce(triggerOutputs()?['headers']?['x-file-name'], triggerOutputs()?['headers']?['X-File-Name'], triggerOutputs()?['queries']?['fileName'], 'http-upload.csv')"
+                        }
+                    ]
+                },
+                "runAfter": {}
+            },
+            "Initialize_ValidRecords": {
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "ValidRecords",
+                            "type": "Array",
+                            "value": []
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_Source_File_Name": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Initialize_InvalidRecords": {
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "InvalidRecords",
+                            "type": "Array",
+                            "value": []
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_ValidRecords": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Initialize_FailedBatchRecords": {
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "FailedBatchRecords",
+                            "type": "Array",
+                            "value": []
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_InvalidRecords": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Initialize_Batch_Size": {
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "BatchSize",
+                            "type": "Integer",
+                            "value": 200
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_FailedBatchRecords": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Initialize_Csv_Content": {
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "CsvContent",
+                            "type": "String",
+                            "value": "@if(contains(toLower(coalesce(triggerOutputs()?['headers']?['content-type'], triggerOutputs()?['headers']?['Content-Type'], '')), 'application/octet-stream'), base64ToString(triggerBody()), string(triggerBody()))"
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_Batch_Size": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Initialize_Row_Number": {
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "RowNumber",
+                            "type": "Integer",
+                            "value": 2
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_Csv_Content": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Normalize_Csv_Content": {
+                "type": "Compose",
+                "inputs": "@trim(replace(variables('CsvContent'), '\r\n', '\n'))",
+                "runAfter": {
+                    "Initialize_Row_Number": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Compose_Lines": {
+                "type": "Compose",
+                "inputs": "@split(outputs('Normalize_Csv_Content'), '\n')",
+                "runAfter": {
+                    "Normalize_Csv_Content": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Process_Filtered_Lines": {
+                "type": "If",
+                "expression": {
+                    "greater": [
+                        "@length(outputs('Compose_Lines'))",
+                        0
+                    ]
+                },
+                "actions": {
+                    "Compose_Header_Array": {
+                        "type": "Compose",
+                        "inputs": "@split(first(outputs('Compose_Lines')), ',')"
+                    },
+                    "Validate_Headers": {
+                        "type": "If",
+                        "expression": {
+                            "equals": [
+                                "@join(outputs('Compose_Header_Array'), ',')",
+                                "customer_id,email,amount,imported_at"
+                            ]
+                        },
+                        "actions": {
+                            "Compose_Data_Lines": {
+                                "type": "Compose",
+                                "inputs": "@skip(outputs('Compose_Lines'), 1)"
+                            },
+                            "For_each_csv_row": {
+                                "type": "Foreach",
+                                "foreach": "@outputs('Compose_Data_Lines')",
+                                "actions": {
+                                    "Process_Row": {
+                                        "type": "If",
+                                        "expression": {
+                                            "greater": [
+                                                "@length(trim(item()))",
+                                                0
+                                            ]
+                                        },
+                                        "actions": {
+                                            "Split_Current_Line": {
+                                                "type": "Compose",
+                                                "inputs": "@split(item(), ',')"
+                                            },
+                                            "Validate_Column_Count": {
+                                                "type": "If",
+                                                "expression": {
+                                                    "equals": [
+                                                        "@length(outputs('Split_Current_Line'))",
+                                                        4
+                                                    ]
+                                                },
+                                                "actions": {
+                                                    "Compose_Current_Record": {
+                                                        "type": "Compose",
+                                                        "inputs": {
+                                                            "customer_id": "@trim(outputs('Split_Current_Line')[0])",
+                                                            "email": "@trim(outputs('Split_Current_Line')[1])",
+                                                            "amount": "@trim(outputs('Split_Current_Line')[2])",
+                                                            "imported_at": "@trim(outputs('Split_Current_Line')[3])"
+                                                        }
+                                                    },
+                                                    "Compose_Amount_NonNumeric": {
+                                                        "type": "Compose",
+                                                        "inputs": "@replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(replace(outputs('Compose_Current_Record')?['amount'], '0', ''), '1', ''), '2', ''), '3', ''), '4', ''), '5', ''), '6', ''), '7', ''), '8', ''), '9', ''), '.', ''), '-', '')",
+                                                        "runAfter": {
+                                                            "Compose_Current_Record": [
+                                                                "Succeeded"
+                                                            ]
+                                                        }
+                                                    },
+                                                    "Compose_Email_Parts": {
+                                                        "type": "Compose",
+                                                        "inputs": "@split(outputs('Compose_Current_Record')?['email'], '@')",
+                                                        "runAfter": {
+                                                            "Compose_Amount_NonNumeric": [
+                                                                "Succeeded"
+                                                            ]
+                                                        }
+                                                    },
+                                                    "Compose_Record_Is_Valid": {
+                                                        "type": "Compose",
+                                                        "inputs": "@and(not(equals(outputs('Compose_Current_Record')?['customer_id'], '')), not(equals(outputs('Compose_Current_Record')?['email'], '')), not(equals(outputs('Compose_Current_Record')?['amount'], '')), equals(outputs('Compose_Amount_NonNumeric'), ''), equals(length(outputs('Compose_Email_Parts')), 2), contains(outputs('Compose_Email_Parts')[1], '.'), not(contains(outputs('Compose_Current_Record')?['email'], ' ')))",
+                                                        "runAfter": {
+                                                            "Compose_Email_Parts": [
+                                                                "Succeeded"
+                                                            ]
+                                                        }
+                                                    },
+                                                    "Validate_Record": {
+                                                        "type": "If",
+                                                        "expression": {
+                                                            "equals": [
+                                                                "@outputs('Compose_Record_Is_Valid')",
+                                                                true
+                                                            ]
+                                                        },
+                                                        "actions": {
+                                                            "Append_Valid_Record": {
+                                                                "type": "AppendToArrayVariable",
+                                                                "inputs": {
+                                                                    "name": "ValidRecords",
+                                                                    "value": {
+                                                                        "customer_id": "@outputs('Compose_Current_Record')?['customer_id']",
+                                                                        "email": "@outputs('Compose_Current_Record')?['email']",
+                                                                        "amount": "@outputs('Compose_Current_Record')?['amount']",
+                                                                        "imported_at": "@if(equals(outputs('Compose_Current_Record')?['imported_at'], ''), utcNow(), outputs('Compose_Current_Record')?['imported_at'])"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "Insert_row": {
+                                                                "type": "ApiConnection",
+                                                                "inputs": {
+                                                                    "host": {
+                                                                        "connection": {
+                                                                            "referenceName": "postgresql"
+                                                                        }
+                                                                    },
+                                                                    "method": "post",
+                                                                    "body": {
+                                                                        "customer_id": "@item()['customer_id']",
+                                                                        "email": "@item()['email']",
+                                                                        "amount": "@item()['amount']",
+                                                                        "imported_at": "@item()['imported_at']"
+                                                                    },
+                                                                    "path": "/datasets/default/tables/@{encodeURIComponent(encodeURIComponent('[public].[import_data]'))}/items"
+                                                                },
+                                                                "runAfter": {
+                                                                    "Append_Valid_Record": [
+                                                                        "SUCCEEDED"
+                                                                    ]
+                                                                }
+                                                            }
+                                                        },
+                                                        "else": {
+                                                            "actions": {
+                                                                "Append_Invalid_Record": {
+                                                                    "type": "AppendToArrayVariable",
+                                                                    "inputs": {
+                                                                        "name": "InvalidRecords",
+                                                                        "value": {
+                                                                            "rowNumber": "@variables('RowNumber')",
+                                                                            "raw": "@item()",
+                                                                            "record": "@outputs('Compose_Current_Record')",
+                                                                            "reason": "Failed data validation"
+                                                                        }
+                                                                    }
+                                                                },
+                                                                "Insert_row_1": {
+                                                                    "type": "ApiConnection",
+                                                                    "inputs": {
+                                                                        "host": {
+                                                                            "connection": {
+                                                                                "referenceName": "postgresql"
+                                                                            }
+                                                                        },
+                                                                        "method": "post",
+                                                                        "body": {
+                                                                            "id": "@int(substring(ticks(utcNow()), 0, 18))",
+                                                                            "source_file": "@variables('SourceFileName')",
+                                                                            "error_reason": "@coalesce(item()?['reason'], 'Unknown error')",
+                                                                            "created_at": "@utcNow()"
+                                                                        },
+                                                                        "path": "/datasets/default/tables/@{encodeURIComponent(encodeURIComponent('[public].[import_errors]'))}/items"
+                                                                    },
+                                                                    "runAfter": {
+                                                                        "Append_Invalid_Record": [
+                                                                            "SUCCEEDED"
+                                                                        ]
+                                                                    }
+                                                                }
+                                                            }
+                                                        },
+                                                        "runAfter": {
+                                                            "Compose_Record_Is_Valid": [
+                                                                "Succeeded"
+                                                            ]
+                                                        }
+                                                    }
+                                                },
+                                                "else": {
+                                                    "actions": {
+                                                        "Append_Invalid_Record_Column_Mismatch": {
+                                                            "type": "AppendToArrayVariable",
+                                                            "inputs": {
+                                                                "name": "InvalidRecords",
+                                                                "value": {
+                                                                    "rowNumber": "@variables('RowNumber')",
+                                                                    "raw": "@item()",
+                                                                    "record": {},
+                                                                    "reason": "Column count mismatch"
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                                "runAfter": {
+                                                    "Split_Current_Line": [
+                                                        "Succeeded"
+                                                    ]
+                                                }
+                                            }
+                                        },
+                                        "else": {
+                                            "actions": {}
+                                        }
+                                    },
+                                    "Increment_Row_Number": {
+                                        "type": "IncrementVariable",
+                                        "inputs": {
+                                            "name": "RowNumber",
+                                            "value": 1
+                                        },
+                                        "runAfter": {
+                                            "Process_Row": [
+                                                "Succeeded",
+                                                "Failed",
+                                                "Skipped"
+                                            ]
+                                        }
+                                    }
+                                },
+                                "runAfter": {
+                                    "Compose_Data_Lines": [
+                                        "Succeeded"
+                                    ]
+                                },
+                                "runtimeConfiguration": {
+                                    "concurrency": {
+                                        "repetitions": 1
+                                    }
+                                }
+                            }
+                        },
+                        "else": {
+                            "actions": {
+                                "Append_Missing_Header_Error": {
+                                    "type": "AppendToArrayVariable",
+                                    "inputs": {
+                                        "name": "InvalidRecords",
+                                        "value": {
+                                            "rowNumber": 1,
+                                            "raw": "",
+                                            "record": {},
+                                            "reason": "Missing required headers"
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        "runAfter": {
+                            "Compose_Header_Array": [
+                                "Succeeded"
+                            ]
+                        }
+                    }
+                },
+                "else": {
+                    "actions": {}
+                },
+                "runAfter": {
+                    "Compose_Lines": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Process_Invalid_Records": {
+                "type": "If",
+                "expression": {
+                    "greater": [
+                        "@length(variables('InvalidRecords'))",
+                        0
+                    ]
+                },
+                "actions": {
+                    "For_each_invalid_record": {
+                        "type": "Foreach",
+                        "foreach": "@variables('InvalidRecords')",
+                        "actions": {
+                            "Log_Invalid_Record": {
+                                "type": "Compose",
+                                "inputs": {
+                                    "actionNote": "Add PostgreSQL insert for invalid record here",
+                                    "source_file": "@variables('SourceFileName')",
+                                    "row_number": "@coalesce(item()?['rowNumber'], 0)",
+                                    "payload": "@string(item()?['record'])",
+                                    "reason": "@coalesce(item()?['reason'], 'Unknown error')"
+                                }
+                            }
+                        }
+                    }
+                },
+                "else": {
+                    "actions": {}
+                },
+                "runAfter": {
+                    "Process_Filtered_Lines": [
+                        "Succeeded",
+                        "Skipped"
+                    ]
+                }
+            },
+            "Chunk_Valid_Records": {
+                "type": "Compose",
+                "inputs": "@chunk(variables('ValidRecords'), variables('BatchSize'))",
+                "runAfter": {
+                    "Process_Invalid_Records": [
+                        "Succeeded",
+                        "Skipped"
+                    ]
+                }
+            },
+            "Process_Valid_Batches": {
+                "type": "If",
+                "expression": {
+                    "greater": [
+                        "@length(variables('ValidRecords'))",
+                        0
+                    ]
+                },
+                "actions": {
+                    "For_each_batch": {
+                        "type": "Foreach",
+                        "foreach": "@outputs('Chunk_Valid_Records')",
+                        "actions": {
+                            "Persist_Batch": {
+                                "type": "Scope",
+                                "actions": {
+                                    "Build_Batch_Query": {
+                                        "type": "Compose",
+                                        "inputs": "@{concat('BEGIN; WITH payload AS (SELECT ''', replace(string(items('For_each_batch')), '''', ''''''), '''::json AS body) INSERT INTO public.import_data (customer_id, email, amount, imported_at) SELECT (value->>''customer_id'')::uuid, value->>''email'', (value->>''amount'')::numeric, COALESCE((value->>''imported_at'')::timestamptz, NOW()) FROM json_to_recordset(payload.body) AS value(customer_id text, email text, amount text, imported_at text); COMMIT;')}"
+                                    },
+                                    "Execute_Batch_Insert": {
+                                        "type": "Compose",
+                                        "inputs": {
+                                            "actionNote": "Add PostgreSQL batch insert action here",
+                                            "query": "@outputs('Build_Batch_Query')"
+                                        },
+                                        "runAfter": {
+                                            "Build_Batch_Query": [
+                                                "Succeeded"
+                                            ]
+                                        }
+                                    }
+                                }
+                            },
+                            "Handle_Batch_Failure": {
+                                "type": "Scope",
+                                "actions": {
+                                    "Capture_Batch_Error": {
+                                        "type": "Compose",
+                                        "inputs": "@{coalesce(string(result('Persist_Batch')[0]['error']['message']), string(result('Persist_Batch')[0]['error']), 'Unknown batch failure')}"
+                                    },
+                                    "Append_failed_records": {
+                                        "type": "AppendToArrayVariable",
+                                        "inputs": {
+                                            "name": "FailedBatchRecords",
+                                            "value": "@items('For_each_batch')"
+                                        },
+                                        "runAfter": {
+                                            "Capture_Batch_Error": [
+                                                "Succeeded",
+                                                "Failed",
+                                                "Skipped"
+                                            ]
+                                        }
+                                    },
+                                    "For_each_failed_record": {
+                                        "type": "Foreach",
+                                        "foreach": "@items('For_each_batch')",
+                                        "actions": {
+                                            "Log_failed_record": {
+                                                "type": "Compose",
+                                                "inputs": {
+                                                    "actionNote": "Add PostgreSQL insert for failed batch record here",
+                                                    "source_file": "@variables('SourceFileName')",
+                                                    "payload": "@string(item())",
+                                                    "error_reason": "@outputs('Capture_Batch_Error')"
+                                                }
+                                            }
+                                        },
+                                        "runAfter": {
+                                            "Append_failed_records": [
+                                                "Succeeded",
+                                                "Skipped"
+                                            ]
+                                        }
+                                    }
+                                },
+                                "runAfter": {
+                                    "Persist_Batch": [
+                                        "Failed",
+                                        "TimedOut"
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                },
+                "else": {
+                    "actions": {}
+                },
+                "runAfter": {
+                    "Chunk_Valid_Records": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Send_Import_Response": {
+                "type": "Response",
+                "kind": "Http",
+                "inputs": {
+                    "statusCode": 200,
+                    "body": {
+                        "file": "@variables('SourceFileName')",
+                        "totalRecords": "@add(length(variables('ValidRecords')), length(variables('InvalidRecords')))",
+                        "validRecords": "@length(variables('ValidRecords'))",
+                        "invalidRecords": "@length(variables('InvalidRecords'))",
+                        "failedDuringInsert": "@length(variables('FailedBatchRecords'))",
+                        "timestamp": "@utcNow()"
+                    }
+                },
+                "runAfter": {
+                    "Process_Valid_Batches": [
+                        "Succeeded",
+                        "Skipped"
+                    ],
+                    "Process_Invalid_Records": [
+                        "Succeeded",
+                        "Skipped"
+                    ]
+                }
+            }
+        },
+        "outputs": {}
+    },
+    "kind": "Stateful"
+}

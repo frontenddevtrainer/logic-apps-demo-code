@@ -1,0 +1,199 @@
+{
+  "status": "decoded",
+  "timestamp": "2023-12-23T14:30:00Z",
+  "messageType": "X12_850_PurchaseOrder",
+  "allSegments": {
+    "DecodedMessage": {
+      "ISA": {
+        "ISA01": "00",
+        "ISA02": "          ",
+        "ISA03": "00",
+        "ISA04": "          ",
+        "ISA05": "ZZ",
+        "ISA06": "CONTOSORETAIL  ",
+        "ISA07": "ZZ",
+        "ISA08": "FABRIKAMSUPPLY ",
+        "ISA09": "231223",
+        "ISA10": "1430",
+        "ISA11": "U",
+        "ISA12": "00401",
+        "ISA13": "000000001",
+        "ISA14": "0",
+        "ISA15": "P",
+        "ISA16": ":"
+      },
+      "GS": {
+        "GS01": "PO",
+        "GS02": "CONTOSORETAIL",
+        "GS03": "FABRIKAMSUPPLY",
+        "GS04": "20231223",
+        "GS05": "1430",
+        "GS06": "1",
+        "GS07": "X",
+        "GS08": "004010"
+      },
+      "ST": {
+        "ST01": "850",
+        "ST02": "0001"
+      },
+      "TransactionSets": [
+        {
+          "BEG": {
+            "BEG01": "00",
+            "BEG02": "NE",
+            "BEG03": "PO-2023-12345",
+            "BEG04": "",
+            "BEG05": "20231223"
+          },
+          "REF": [
+            {
+              "REF01": "DP",
+              "REF02": "DEPT-ELECTRONICS"
+            },
+            {
+              "REF01": "IA",
+              "REF02": "INTERNAL-ORDER-98765"
+            }
+          ],
+          "DTM": [
+            {
+              "DTM01": "002",
+              "DTM02": "20231230"
+            },
+            {
+              "DTM01": "010",
+              "DTM02": "20231223"
+            }
+          ],
+          "N1Loop": [
+            {
+              "N1": {
+                "N101": "BY",
+                "N102": "Contoso Retail Corporation",
+                "N103": "92",
+                "N104": "12-3456789"
+              },
+              "N3": {
+                "N301": "123 Main Street"
+              },
+              "N4": {
+                "N401": "Seattle",
+                "N402": "WA",
+                "N403": "98101",
+                "N404": "US"
+              }
+            },
+            {
+              "N1": {
+                "N101": "ST",
+                "N102": "Contoso Warehouse District 5",
+                "N103": "92",
+                "N104": "98-7654321"
+              },
+              "N3": {
+                "N301": "456 Warehouse Boulevard"
+              },
+              "N4": {
+                "N401": "Tacoma",
+                "N402": "WA",
+                "N403": "98402",
+                "N404": "US"
+              }
+            }
+          ],
+          "PO1Loop": [
+            {
+              "PO1": {
+                "PO101": "1",
+                "PO102": "100",
+                "PO103": "EA",
+                "PO104": "29.99",
+                "PO105": "PE",
+                "PO106": "UP",
+                "PO107": "043000181706",
+                "PO108": "BP",
+                "PO109": "WIDGET-ALPHA-500"
+              },
+              "PID": [
+                {
+                  "PID01": "F",
+                  "PID02": "",
+                  "PID03": "",
+                  "PID04": "",
+                  "PID05": "Premium Alpha Widget - 500 Series"
+                }
+              ]
+            },
+            {
+              "PO1": {
+                "PO101": "2",
+                "PO102": "50",
+                "PO103": "EA",
+                "PO104": "149.99",
+                "PO105": "PE",
+                "PO106": "UP",
+                "PO107": "043000181713",
+                "PO108": "BP",
+                "PO109": "GADGET-BETA-2000"
+              },
+              "PID": [
+                {
+                  "PID01": "F",
+                  "PID02": "",
+                  "PID03": "",
+                  "PID04": "",
+                  "PID05": "Beta Gadget Pro - 2000 Model"
+                }
+              ]
+            },
+            {
+              "PO1": {
+                "PO101": "3",
+                "PO102": "200",
+                "PO103": "EA",
+                "PO104": "5.49",
+                "PO105": "PE",
+                "PO106": "UP",
+                "PO107": "043000181720",
+                "PO108": "BP",
+                "PO109": "SUPPLY-GAMMA-100"
+              },
+              "PID": [
+                {
+                  "PID01": "F",
+                  "PID02": "",
+                  "PID03": "",
+                  "PID04": "",
+                  "PID05": "Gamma Supply Kit - 100 Pack"
+                }
+              ]
+            }
+          ],
+          "CTT": {
+            "CTT01": "3",
+            "CTT02": "350"
+          }
+        }
+      ],
+      "SE": {
+        "SE01": "21",
+        "SE02": "0001"
+      },
+      "GE": {
+        "GE01": "1",
+        "GE02": "1"
+      },
+      "IEA": {
+        "IEA01": "1",
+        "IEA02": "000000001"
+      }
+    }
+  },
+  "summary": {
+    "purchaseOrderNumber": "PO-2023-12345",
+    "orderDate": "20231223",
+    "sender": "CONTOSORETAIL  ",
+    "receiver": "FABRIKAMSUPPLY ",
+    "lineItemCount": 3
+  }
+}

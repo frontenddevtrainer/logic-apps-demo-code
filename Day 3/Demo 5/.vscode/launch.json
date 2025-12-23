@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Day 3 Demo 5 - Debug Stored Proc Function",
+      "type": "python",
+      "request": "attach",
+      "connect": {
+        "host": "localhost",
+        "port": 9091
+      },
+      "preLaunchTask": "func: start Day 3 Demo 5",
+      "justMyCode": true
+    }
+  ]
+}

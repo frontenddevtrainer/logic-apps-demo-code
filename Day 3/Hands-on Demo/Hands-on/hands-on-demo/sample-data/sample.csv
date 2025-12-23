@@ -1,0 +1,3 @@
+customer_id,email,amount,imported_at
+c5f184d5-6095-49c4-92f3-767b7f873a87,grace@example.com,125.50,2024-04-15T10:00:00Z
+9f3779b6-6df7-4f24-8b72-7f613e4f5e1a,mark@example.com,87.99,2024-04-15T11:30:00Z

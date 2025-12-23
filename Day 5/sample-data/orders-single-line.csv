@@ -1,0 +1,2 @@
+OrderNumber,OrderDate,BuyerId,BuyerName,SellerId,SellerName,ShipToName,ShipToId,ShipToStreet,ShipToCity,ShipToState,ShipToPostal,LineNumber,ItemSku,ItemDescription,Quantity,UOM,UnitPrice
+PO-2001,20240520,BUYER01,Contoso Retail,SELLER01,Fabrikam Supplies,Contoso DC,ST01,123 Warehouse Way,Seattle,WA,98101,1,ABC-100,Premium Widget,25,EA,15.99

@@ -1,0 +1,58 @@
+{
+  "orderId": "PO-2023-12345",
+  "orderType": "PurchaseOrder",
+  "orderDate": "20231223",
+  "requestedDeliveryDate": "20231230",
+  "customer": {
+    "customerId": "CONTOSORETAIL  ",
+    "name": "Contoso Retail Corporation",
+    "identifierCode": "92",
+    "identifier": "12-3456789"
+  },
+  "supplier": {
+    "supplierId": "FABRIKAMSUPPLY ",
+    "name": "Contoso Warehouse District 5"
+  },
+  "lineItems": [
+    {
+      "lineNumber": "1",
+      "quantity": 100,
+      "unitOfMeasure": "EA",
+      "unitPrice": 29.99,
+      "productId": "043000181706",
+      "productIdQualifier": "UP",
+      "productDescription": "Premium Alpha Widget - 500 Series",
+      "lineTotal": 2999.00
+    },
+    {
+      "lineNumber": "2",
+      "quantity": 50,
+      "unitOfMeasure": "EA",
+      "unitPrice": 149.99,
+      "productId": "043000181713",
+      "productIdQualifier": "UP",
+      "productDescription": "Beta Gadget Pro - 2000 Model",
+      "lineTotal": 7499.50
+    },
+    {
+      "lineNumber": "3",
+      "quantity": 200,
+      "unitOfMeasure": "EA",
+      "unitPrice": 5.49,
+      "productId": "043000181720",
+      "productIdQualifier": "UP",
+      "productDescription": "Gamma Supply Kit - 100 Pack",
+      "lineTotal": 1098.00
+    }
+  ],
+  "totalAmount": 11596.50,
+  "currency": "USD",
+  "status": "pending",
+  "metadata": {
+    "receivedAt": "2023-12-23T14:30:00Z",
+    "source": "X12_EDI",
+    "interchangeControlNumber": "000000001",
+    "functionalGroupControlNumber": "1",
+    "transactionSetControlNumber": "0001"
+  }
+}

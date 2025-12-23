@@ -1,0 +1,239 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "contentVersion": "1.0.0.0",
+        "triggers": {
+            "When_an_HTTP_request_is_received": {
+                "type": "Request",
+                "kind": "Http",
+                "inputs": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "records": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "email": {
+                                            "type": "string"
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "email",
+                                        "message"
+                                    ]
+                                }
+                            }
+                        },
+                        "required": [
+                            "records"
+                        ]
+                    }
+                }
+            }
+        },
+        "actions": {
+            "Initialize_batchSize": {
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "batchSize",
+                            "type": "integer",
+                            "value": 500
+                        }
+                    ]
+                },
+                "runAfter": {}
+            },
+            "Initialize_index": {
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "index",
+                            "type": "integer",
+                            "value": 0
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_batchSize": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Initialize_total": {
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "total",
+                            "type": "integer",
+                            "value": "@length(triggerBody()?['records'])"
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_index": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Initialize_successCount": {
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "successCount",
+                            "type": "integer",
+                            "value": 0
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_total": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Initialize_failedRecords": {
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "failedRecords",
+                            "type": "array",
+                            "value": []
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_successCount": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Until_all_batches_processed": {
+                "type": "Until",
+                "expression": "@greaterOrEquals(variables('index'), variables('total'))",
+                "limit": {
+                    "count": 5000,
+                    "timeout": "PT1H"
+                },
+                "actions": {
+                    "Compose_CurrentBatch": {
+                        "type": "Compose",
+                        "inputs": "@take(skip(triggerBody()?['records'], variables('index')), variables('batchSize'))"
+                    },
+                    "For_each_record": {
+                        "type": "Foreach",
+                        "foreach": "@outputs('Compose_CurrentBatch')",
+                        "actions": {
+                            "Process_record": {
+                                "type": "Scope",
+                                "actions": {
+                                    "Insert_row": {
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                            "host": {
+                                                "connection": {
+                                                    "referenceName": "postgresql"
+                                                }
+                                            },
+                                            "method": "post",
+                                            "body": {
+                                                "email": "@items('For_each_record')?['email']",
+                                                "message": "@items('For_each_record')?['message']"
+                                            },
+                                            "path": "/datasets/default/tables/@{encodeURIComponent(encodeURIComponent('[logicapp].[messages]'))}/items"
+                                        }
+                                    }
+                                }
+                            },
+                            "Increment_successCount": {
+                                "type": "IncrementVariable",
+                                "inputs": {
+                                    "name": "successCount",
+                                    "value": 1
+                                },
+                                "runAfter": {
+                                    "Process_record": [
+                                        "Succeeded"
+                                    ]
+                                }
+                            },
+                            "Capture_failed_record": {
+                                "type": "AppendToArrayVariable",
+                                "inputs": {
+                                    "name": "failedRecords",
+                                    "value": "@items('For_each_record')"
+                                },
+                                "runAfter": {
+                                    "Process_record": [
+                                        "Failed",
+                                        "TimedOut"
+                                    ]
+                                }
+                            }
+                        },
+                        "runAfter": {
+                            "Compose_CurrentBatch": [
+                                "Succeeded"
+                            ]
+                        },
+                        "runtimeConfiguration": {
+                            "concurrency": {
+                                "repetitions": 1
+                            }
+                        }
+                    },
+                    "Increment_index": {
+                        "type": "IncrementVariable",
+                        "inputs": {
+                            "name": "index",
+                            "value": "@variables('batchSize')"
+                        },
+                        "runAfter": {
+                            "For_each_record": [
+                                "Succeeded",
+                                "Failed",
+                                "TimedOut"
+                            ]
+                        }
+                    }
+                },
+                "runAfter": {
+                    "Initialize_failedRecords": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Response_to_caller": {
+                "type": "Response",
+                "kind": "Http",
+                "inputs": {
+                    "statusCode": "@{if(equals(length(variables('failedRecords')), 0), 200, 207)}",
+                    "body": {
+                        "received": "@variables('total')",
+                        "inserted": "@variables('successCount')",
+                        "failed": "@length(variables('failedRecords'))",
+                        "failedRecords": "@variables('failedRecords')"
+                    }
+                },
+                "runAfter": {
+                    "Until_all_batches_processed": [
+                        "Succeeded",
+                        "Failed"
+                    ]
+                }
+            }
+        },
+        "outputs": {}
+    },
+    "kind": "Stateful"
+}

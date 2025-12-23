@@ -1,0 +1,79 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "contentVersion": "1.0.0.0",
+        "parameters": {
+            "$connections": {
+                "type": "Object",
+                "defaultValue": {}
+            }
+        },
+        "triggers": {
+            "When_a_blob_is_added_or_updated": {
+                "type": "ServiceProvider",
+                "inputs": {
+                    "parameters": {
+                        "path": "rawfiles"
+                    },
+                    "serviceProviderConfiguration": {
+                        "connectionName": "AzureBlob",
+                        "operationId": "whenABlobIsAddedOrModified",
+                        "serviceProviderId": "/serviceProviders/AzureBlob"
+                    }
+                }
+            }
+        },
+        "actions": {
+            "Log_Trigger_Fired": {
+                "type": "Compose",
+                "inputs": "@concat('Blob trigger fired at ', utcNow())",
+                "runAfter": {}
+            },
+            "Log_Blob_Info": {
+                "type": "Compose",
+                "inputs": "@concat('Blob Name: ', coalesce(triggerBody()?['Name'], triggerBody()?['name']), ' | Path: ', coalesce(triggerBody()?['Path'], triggerBody()?['path']))",
+                "runAfter": {
+                    "Log_Trigger_Fired": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Log_Blob_Metadata": {
+                "type": "Compose",
+                "inputs": "@concat('Size: ', string(coalesce(triggerBody()?['Length'], triggerBody()?['length'], triggerBody()?['properties']?['contentLength'])), ' bytes | ContentType: ', coalesce(triggerBody()?['ContentType'], triggerBody()?['contentType'], triggerBody()?['properties']?['contentType']))",
+                "runAfter": {
+                    "Log_Blob_Info": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Log_Full_Trigger_Output": {
+                "type": "Compose",
+                "inputs": "@triggerBody()",
+                "runAfter": {
+                    "Log_Blob_Metadata": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Compose_Metadata": {
+                "type": "Compose",
+                "inputs": {
+                    "name": "@coalesce(triggerBody()?['Name'], triggerBody()?['name'])",
+                    "path": "@coalesce(triggerBody()?['Path'], triggerBody()?['path'])",
+                    "contentType": "@coalesce(triggerBody()?['ContentType'], triggerBody()?['contentType'], triggerBody()?['properties']?['contentType'])",
+                    "size": "@coalesce(triggerBody()?['Length'], triggerBody()?['length'], triggerBody()?['properties']?['contentLength'])",
+                    "lastModified": "@coalesce(triggerBody()?['LastModified'], triggerBody()?['lastModified'], triggerBody()?['properties']?['lastModified'])",
+                    "metadata": "@coalesce(triggerBody()?['Metadata'], triggerBody()?['metadata'], triggerBody()?['properties']?['metadata'])"
+                },
+                "runAfter": {
+                    "Log_Full_Trigger_Output": [
+                        "Succeeded"
+                    ]
+                }
+            }
+        },
+        "outputs": {}
+    },
+    "kind": "Stateful"
+}

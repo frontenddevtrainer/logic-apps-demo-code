@@ -1,0 +1,160 @@
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "triggers": {
+      "When_a_HTTP_request_is_received": {
+        "type": "Request",
+        "kind": "Http",
+        "inputs": {
+          "method": "POST",
+          "schema": {
+            "type": "object",
+            "properties": {
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "actions": {
+      "Scope_Try": {
+        "type": "Scope",
+        "runAfter": {},
+        "trackedProperties": {
+          "correlationId": "@workflow().run.name",
+          "scope": "try"
+        },
+        "actions": {
+          "Compose_Request_Context": {
+            "type": "Compose",
+            "inputs": {
+              "correlationId": "@workflow().run.name",
+              "forceFail": "@toLower(coalesce(triggerOutputs()?['queries']?['forceFail'], 'false'))",
+              "message": "@coalesce(triggerBody()?['message'], 'Hello from Day 9 demo')"
+            }
+          },
+          "Check_Force_Failure": {
+            "type": "If",
+            "expression": {
+              "equals": [
+                "@outputs('Compose_Request_Context')?['forceFail']",
+                "true"
+              ]
+            },
+            "actions": {
+              "Force_Failure": {
+                "type": "Compose",
+                "inputs": "@div(1,0)"
+              }
+            },
+            "else": {
+              "actions": {
+                "Compose_Success_Message": {
+                  "type": "Compose",
+                  "inputs": "Main processing completed successfully."
+                }
+              }
+            },
+            "runAfter": {
+              "Compose_Request_Context": [
+                "Succeeded"
+              ]
+            }
+          }
+        }
+      },
+      "Scope_Catch": {
+        "type": "Scope",
+        "runAfter": {
+          "Scope_Try": [
+            "Failed",
+            "TimedOut"
+          ]
+        },
+        "trackedProperties": {
+          "correlationId": "@workflow().run.name",
+          "scope": "catch"
+        },
+        "actions": {
+          "Compose_Error_Details": {
+            "type": "Compose",
+            "inputs": {
+              "correlationId": "@workflow().run.name",
+              "status": "@actions('Scope_Try')?['status']",
+              "error": "@actions('Scope_Try')?['error']"
+            }
+          }
+        }
+      },
+      "Scope_Finally": {
+        "type": "Scope",
+        "runAfter": {
+          "Scope_Try": [
+            "Succeeded",
+            "Failed",
+            "TimedOut"
+          ],
+          "Scope_Catch": [
+            "Succeeded",
+            "Skipped"
+          ]
+        },
+        "trackedProperties": {
+          "correlationId": "@workflow().run.name",
+          "scope": "finally"
+        },
+        "actions": {
+          "Compose_Finally": {
+            "type": "Compose",
+            "inputs": {
+              "finishedAt": "@utcNow()",
+              "tryStatus": "@actions('Scope_Try')?['status']"
+            }
+          }
+        }
+      },
+      "Response_Success": {
+        "type": "Response",
+        "runAfter": {
+          "Scope_Try": [
+            "Succeeded"
+          ],
+          "Scope_Finally": [
+            "Succeeded"
+          ]
+        },
+        "inputs": {
+          "statusCode": 200,
+          "body": {
+            "status": "ok",
+            "correlationId": "@workflow().run.name"
+          }
+        }
+      },
+      "Response_Failure": {
+        "type": "Response",
+        "runAfter": {
+          "Scope_Catch": [
+            "Succeeded"
+          ],
+          "Scope_Finally": [
+            "Succeeded"
+          ]
+        },
+        "inputs": {
+          "statusCode": 500,
+          "body": {
+            "status": "failed",
+            "correlationId": "@workflow().run.name",
+            "error": "@actions('Scope_Try')?['error']"
+          }
+        }
+      }
+    },
+    "outputs": {}
+  },
+  "kind": "Stateful"
+}

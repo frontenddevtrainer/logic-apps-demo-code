@@ -1,0 +1,169 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "contentVersion": "1.0.0.0",
+        "triggers": {
+            "When_an_HTTP_request_is_received": {
+                "type": "Request",
+                "kind": "Http",
+                "inputs": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "records": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "email": {
+                                            "type": "string"
+                                        },
+                                        "message": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": [
+                                        "email",
+                                        "message"
+                                    ]
+                                }
+                            }
+                        },
+                        "required": [
+                            "records"
+                        ]
+                    }
+                }
+            }
+        },
+        "actions": {
+            "Initialize_batchSize": {
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "batchSize",
+                            "type": "integer",
+                            "value": 500
+                        }
+                    ]
+                },
+                "runAfter": {}
+            },
+            "Initialize_index": {
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "index",
+                            "type": "integer",
+                            "value": 0
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_batchSize": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Initialize_total": {
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "total",
+                            "type": "integer",
+                            "value": "@length(triggerBody()?['records'])"
+                        }
+                    ]
+                },
+                "runAfter": {
+                    "Initialize_index": [
+                        "Succeeded"
+                    ]
+                }
+            },
+            "Until_all_batches_processed": {
+                "type": "Until",
+                "expression": "@greaterOrEquals(variables('index'), variables('total'))",
+                "limit": {
+                    "count": 5000,
+                    "timeout": "PT1H"
+                },
+                "actions": {
+                    "Compose_CurrentBatch": {
+                        "type": "Compose",
+                        "inputs": "@take(skip(triggerBody()?['records'], variables('index')), variables('batchSize'))"
+                    },
+                    "For_each_record": {
+                        "type": "Foreach",
+                        "foreach": "@outputs('Compose_CurrentBatch')",
+                        "actions": {
+                            "Try_Insert": {
+                                "type": "Scope",
+                                "actions": {
+                                    "Insert_Main_Record": {
+                                        "type": "ApiConnection",
+                                        "inputs": {
+                                            "host": {
+                                                "connection": {
+                                                    "referenceName": "postgresql"
+                                                }
+                                            },
+                                            "method": "post",
+                                            "body": {
+                                                "email": "@items('For_each_record')?['email']",
+                                                "message": "@items('For_each_record')?['message']"
+                                            },
+                                            "path": "/datasets/default/tables/@{encodeURIComponent(encodeURIComponent('[logicapp].[messages]'))}/items"
+                                        }
+                                    }
+                                }
+                            },
+                            "Catch_To_DLQ": {
+                                "type": "Scope",
+                                "actions": {},
+                                "runAfter": {
+                                    "Try_Insert": [
+                                        "Failed",
+                                        "TimedOut"
+                                    ]
+                                }
+                            }
+                        },
+                        "runAfter": {
+                            "Compose_CurrentBatch": [
+                                "Succeeded"
+                            ]
+                        },
+                        "runtimeConfiguration": {
+                            "concurrency": {
+                                "repetitions": 1
+                            }
+                        }
+                    },
+                    "Increment_index": {
+                        "type": "IncrementVariable",
+                        "inputs": {
+                            "name": "index",
+                            "value": "@variables('batchSize')"
+                        },
+                        "runAfter": {
+                            "For_each_record": [
+                                "Succeeded"
+                            ]
+                        }
+                    }
+                },
+                "runAfter": {
+                    "Initialize_total": [
+                        "Succeeded"
+                    ]
+                }
+            }
+        },
+        "outputs": {}
+    },
+    "kind": "Stateful"
+}

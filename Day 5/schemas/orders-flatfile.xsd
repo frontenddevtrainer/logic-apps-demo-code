@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"
+           xmlns:b="http://schemas.microsoft.com/BizTalk/2003"
+           targetNamespace="http://schemas.logicapps.demo/orders/csv"
+           elementFormDefault="qualified">
+  <xs:annotation>
+    <xs:appinfo>
+      <b:schemaInfo standard="Flat File" root_reference="Orders" />
+    </xs:appinfo>
+  </xs:annotation>
+
+  <xs:element name="Orders">
+    <xs:annotation>
+      <xs:appinfo>
+        <b:recordInfo structure="delimited"
+                      child_delimiter_type="hex"
+                      child_delimiter="0x0D 0x0A"
+                      child_order="infix"
+                      suppress_trailing_delimiters="true" />
+      </xs:appinfo>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Header" minOccurs="0" maxOccurs="1">
+          <xs:annotation>
+            <xs:appinfo>
+              <b:recordInfo structure="delimited"
+                            child_delimiter_type="char"
+                            child_delimiter=","
+                            child_order="infix"
+                            tag="OrderNumber" />
+            </xs:appinfo>
+          </xs:annotation>
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="OrderNumber" type="xs:string" />
+              <xs:element name="OrderDate" type="xs:string" />
+              <xs:element name="BuyerId" type="xs:string" />
+              <xs:element name="BuyerName" type="xs:string" />
+              <xs:element name="SellerId" type="xs:string" />
+              <xs:element name="SellerName" type="xs:string" />
+              <xs:element name="ShipToName" type="xs:string" />
+              <xs:element name="ShipToId" type="xs:string" />
+              <xs:element name="ShipToStreet" type="xs:string" />
+              <xs:element name="ShipToCity" type="xs:string" />
+              <xs:element name="ShipToState" type="xs:string" />
+              <xs:element name="ShipToPostal" type="xs:string" />
+              <xs:element name="LineNumber" type="xs:string" />
+              <xs:element name="ItemSku" type="xs:string" />
+              <xs:element name="ItemDescription" type="xs:string" />
+              <xs:element name="Quantity" type="xs:string" />
+              <xs:element name="UOM" type="xs:string" />
+              <xs:element name="UnitPrice" type="xs:string" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <xs:element name="Order" maxOccurs="unbounded">
+          <xs:annotation>
+            <xs:appinfo>
+              <b:recordInfo structure="delimited"
+                            child_delimiter_type="char"
+                            child_delimiter=","
+                            child_order="infix" />
+            </xs:appinfo>
+          </xs:annotation>
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="OrderNumber" type="xs:string" />
+              <xs:element name="OrderDate" type="xs:string" />
+              <xs:element name="BuyerId" type="xs:string" />
+              <xs:element name="BuyerName" type="xs:string" />
+              <xs:element name="SellerId" type="xs:string" />
+              <xs:element name="SellerName" type="xs:string" />
+              <xs:element name="ShipToName" type="xs:string" />
+              <xs:element name="ShipToId" type="xs:string" />
+              <xs:element name="ShipToStreet" type="xs:string" />
+              <xs:element name="ShipToCity" type="xs:string" />
+              <xs:element name="ShipToState" type="xs:string" />
+              <xs:element name="ShipToPostal" type="xs:string" />
+              <xs:element name="LineNumber" type="xs:string" />
+              <xs:element name="ItemSku" type="xs:string" />
+              <xs:element name="ItemDescription" type="xs:string" />
+              <xs:element name="Quantity" type="xs:string" />
+              <xs:element name="UOM" type="xs:string" />
+              <xs:element name="UnitPrice" type="xs:string" />
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

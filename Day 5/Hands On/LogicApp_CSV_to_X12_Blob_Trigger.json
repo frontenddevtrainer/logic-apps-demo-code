@@ -1,0 +1,364 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "contentVersion": "1.0.0.0",
+        "triggers": {
+            "When_a_blob_is_added_or_modified_(properties_only)_(V2)": {
+                "recurrence": {
+                    "interval": 3,
+                    "frequency": "Minute"
+                },
+                "evaluatedRecurrence": {
+                    "interval": 3,
+                    "frequency": "Minute"
+                },
+                "splitOn": "@triggerBody()",
+                "metadata": {
+                    "JTJmaW5jb21pbmctb3JkZXJz": "/incoming-orders"
+                },
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azureblob']['connectionId']"
+                        }
+                    },
+                    "method": "get",
+                    "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/triggers/batch/onupdatedfile",
+                    "queries": {
+                        "folderId": "JTJmaW5jb21pbmctb3JkZXJz",
+                        "maxFileCount": 10,
+                        "checkBothCreatedAndModifiedDateTime": false
+                    }
+                }
+            }
+        },
+        "actions": {
+            "Initialize_CorrelationId": {
+                "runAfter": {},
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "correlationId",
+                            "type": "string",
+                            "value": "@{guid()}"
+                        }
+                    ]
+                }
+            },
+            "Initialize_FileName": {
+                "runAfter": {
+                    "Initialize_CorrelationId": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "fileName",
+                            "type": "string",
+                            "value": ""
+                        }
+                    ]
+                }
+            },
+            "Get_blob_content": {
+                "runAfter": {
+                    "Initialize_FileName": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azureblob']['connectionId']"
+                        }
+                    },
+                    "method": "get",
+                    "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/files/@{encodeURIComponent(encodeURIComponent(triggerBody()?['Path']))}/content",
+                    "queries": {
+                        "inferContentType": true
+                    }
+                }
+            },
+            "Flat_File_Decoding": {
+                "runAfter": {
+                    "Get_blob_content": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "FlatFileDecoding",
+                "inputs": {
+                    "content": "@body('Get_blob_content')",
+                    "integrationAccount": {
+                        "schema": {
+                            "name": "orders-flatfile"
+                        }
+                    }
+                }
+            },
+            "Transform_XML": {
+                "runAfter": {
+                    "Flat_File_Decoding": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Xslt",
+                "inputs": {
+                    "content": "@body('Flat_File_Decoding')",
+                    "integrationAccount": {
+                        "map": {
+                            "name": "CsvToX12_850"
+                        }
+                    }
+                }
+            },
+            "Validate_XML": {
+                "runAfter": {
+                    "Transform_XML": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "XmlValidation",
+                "inputs": {
+                    "content": "@body('Transform_XML')",
+                    "integrationAccount": {
+                        "schema": {
+                            "name": "X12_00401_850"
+                        }
+                    }
+                }
+            },
+            "Condition_Check_Validation": {
+                "actions": {
+                    "Encode_to_X12_message": {
+                        "type": "ApiConnection",
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['x12']['connectionId']"
+                                }
+                            },
+                            "method": "post",
+                            "body": "@body('Transform_XML')",
+                            "path": "/EncodeV2/ResolveByName",
+                            "queries": {
+                                "agreementName": "ContosoRetail_To_FabrikamSupplies_X12"
+                            }
+                        }
+                    },
+                    "Extract_OrderNumber": {
+                        "runAfter": {
+                            "Encode_to_X12_message": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "Compose",
+                        "inputs": "@xpath(xml(body('Flat_File_Decoding')), 'string(//Order[1]/OrderNumber/text())')"
+                    },
+                    "Create_X12_Blob": {
+                        "runAfter": {
+                            "Extract_OrderNumber": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "ApiConnection",
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                }
+                            },
+                            "method": "post",
+                            "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/files",
+                            "queries": {
+                                "folderPath": "/x12-output",
+                                "name": "@{coalesce(outputs('Extract_OrderNumber'), 'PO-UNKNOWN')}_@{formatDateTime(utcNow(), 'yyyyMMdd-HHmmss')}_@{variables('correlationId')}.x12",
+                                "queryParametersSingleEncoded": true
+                            },
+                            "body": "@body('Encode_to_X12_message')",
+                            "headers": {
+                                "ReadFileMetadataFromServer": true
+                            }
+                        },
+                        "runtimeConfiguration": {
+                            "contentTransfer": {
+                                "transferMode": "Chunked"
+                            }
+                        }
+                    },
+                    "Move_to_Archive": {
+                        "runAfter": {
+                            "Create_X12_Blob": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "ApiConnection",
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                }
+                            },
+                            "method": "post",
+                            "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/copyFile",
+                            "queries": {
+                                "source": "@triggerBody()?['Path']",
+                                "destination": "/archive/@{variables('fileName')}",
+                                "overwrite": true,
+                                "queryParametersSingleEncoded": true
+                            }
+                        }
+                    },
+                    "Delete_Original_After_Archive": {
+                        "runAfter": {
+                            "Move_to_Archive": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "ApiConnection",
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                }
+                            },
+                            "method": "delete",
+                            "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/files/@{encodeURIComponent(encodeURIComponent(triggerBody()?['Path']))}"
+                        }
+                    }
+                },
+                "runAfter": {
+                    "Validate_XML": [
+                        "Succeeded"
+                    ]
+                },
+                "else": {
+                    "actions": {
+                        "Create_Error_Blob": {
+                            "runAfter": {},
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/files",
+                                "queries": {
+                                    "folderPath": "/validation-errors",
+                                    "name": "ERROR_@{variables('fileName')}_@{formatDateTime(utcNow(), 'yyyyMMdd-HHmmss')}.json",
+                                    "queryParametersSingleEncoded": true
+                                },
+                                "body": {
+                                    "timestamp": "@utcNow()",
+                                    "correlationId": "@variables('correlationId')",
+                                    "fileName": "@variables('fileName')",
+                                    "filePath": "@triggerBody()?['Path']",
+                                    "status": "validation_failed",
+                                    "errorCode": "X12_850_SCHEMA_VALIDATION_ERROR",
+                                    "validationErrors": "@body('Validate_XML')?['Errors']",
+                                    "message": "The transformed X12 850 XML does not conform to the schema",
+                                    "stage": "post_transformation",
+                                    "suggestion": "Check CSV data quality and field mappings in CsvToX12_850 XSLT",
+                                    "transformedXml": "@{body('Transform_XML')}",
+                                    "originalCsvBase64": "@{base64(body('Get_blob_content'))}"
+                                },
+                                "headers": {
+                                    "ReadFileMetadataFromServer": true
+                                }
+                            }
+                        },
+                        "Move_to_Errors_Folder": {
+                            "runAfter": {
+                                "Create_Error_Blob": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                    }
+                                },
+                                "method": "post",
+                                "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/copyFile",
+                                "queries": {
+                                    "source": "@triggerBody()?['Path']",
+                                    "destination": "/errors/@{variables('fileName')}",
+                                    "overwrite": true,
+                                    "queryParametersSingleEncoded": true
+                                }
+                            }
+                        },
+                        "Delete_Original_After_Error": {
+                            "runAfter": {
+                                "Move_to_Errors_Folder": [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type": "ApiConnection",
+                            "inputs": {
+                                "host": {
+                                    "connection": {
+                                        "name": "@parameters('$connections')['azureblob']['connectionId']"
+                                    }
+                                },
+                                "method": "delete",
+                                "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/files/@{encodeURIComponent(encodeURIComponent(triggerBody()?['Path']))}"
+                            }
+                        }
+                    }
+                },
+                "expression": {
+                    "or": [
+                        {
+                            "equals": [
+                                "@body('Validate_XML')?['IsValid']",
+                                true
+                            ]
+                        },
+                        {
+                            "equals": [
+                                "@actions('Validate_XML')['status']",
+                                "Succeeded"
+                            ]
+                        }
+                    ]
+                },
+                "type": "If"
+            }
+        },
+        "outputs": {},
+        "parameters": {
+            "$connections": {
+                "type": "Object",
+                "defaultValue": {}
+            }
+        }
+    },
+    "parameters": {
+        "$connections": {
+            "type": "Object",
+            "value": {
+                "azureblob": {
+                    "id": "/subscriptions/20cda7f0-c25d-4fc3-a336-2726df50af21/providers/Microsoft.Web/locations/uksouth/managedApis/azureblob",
+                    "connectionId": "/subscriptions/20cda7f0-c25d-4fc3-a336-2726df50af21/resourceGroups/CSV-to-X12-Blob-Processor_group/providers/Microsoft.Web/connections/azureblob-1",
+                    "connectionName": "azureblob-1",
+                    "connectionProperties": {}
+                },
+                "x12": {
+                    "id": "/subscriptions/20cda7f0-c25d-4fc3-a336-2726df50af21/providers/Microsoft.Web/locations/uksouth/managedApis/x12",
+                    "connectionId": "/subscriptions/20cda7f0-c25d-4fc3-a336-2726df50af21/resourceGroups/CSV-to-X12-Blob-Processor_group/providers/Microsoft.Web/connections/x12",
+                    "connectionName": "x12",
+                    "connectionProperties": {}
+                }
+            }
+        }
+    }
+}

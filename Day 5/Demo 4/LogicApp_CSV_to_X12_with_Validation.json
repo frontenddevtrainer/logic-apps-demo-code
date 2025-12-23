@@ -1,0 +1,183 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "contentVersion": "1.0.0.0",
+        "triggers": {
+            "manual": {
+                "type": "Request",
+                "kind": "Http",
+                "inputs": {
+                    "schema": {}
+                }
+            }
+        },
+        "actions": {
+            "Flat_File_Decoding": {
+                "runAfter": {},
+                "type": "FlatFileDecoding",
+                "inputs": {
+                    "content": "@triggerBody()['$multipart'][0]['body']",
+                    "integrationAccount": {
+                        "schema": {
+                            "name": "orders-flatfile"
+                        }
+                    }
+                }
+            },
+            "Transform_XML": {
+                "runAfter": {
+                    "Flat_File_Decoding": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Xslt",
+                "inputs": {
+                    "content": "@body('Flat_File_Decoding')",
+                    "integrationAccount": {
+                        "map": {
+                            "name": "CsvToX12_850"
+                        }
+                    }
+                }
+            },
+            "Validate_XML": {
+                "runAfter": {
+                    "Transform_XML": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "XmlValidation",
+                "inputs": {
+                    "content": "@body('Transform_XML')",
+                    "integrationAccount": {
+                        "schema": {
+                            "name": "X12_00401_850"
+                        }
+                    }
+                }
+            },
+            "Compose_Validation_Output": {
+                "runAfter": {
+                    "Validate_XML": [
+                        "Succeeded",
+                        "Failed"
+                    ]
+                },
+                "type": "Compose",
+                "inputs": "@body('Validate_XML')"
+            },
+            "Condition": {
+                "actions": {
+                    "Encode_to_X12_message_by_agreement_name": {
+                        "type": "ApiConnection",
+                        "inputs": {
+                            "host": {
+                                "connection": {
+                                    "name": "@parameters('$connections')['x12']['connectionId']"
+                                }
+                            },
+                            "method": "post",
+                            "body": "@body('Transform_XML')",
+                            "path": "/encode/resolvebyname",
+                            "queries": {
+                                "agreementName": "ContosoRetail_To_FabrikamSupplies_X12"
+                            }
+                        },
+                        "runAfter": {}
+                    },
+                    "Response_Success": {
+                        "runAfter": {
+                            "Encode_to_X12_message_by_agreement_name": [
+                                "Succeeded"
+                            ]
+                        },
+                        "type": "Response",
+                        "kind": "Http",
+                        "inputs": {
+                            "statusCode": 200,
+                            "headers": {
+                                "Content-Type": "text/plain"
+                            },
+                            "body": "@body('Encode_to_X12_message_by_agreement_name')"
+                        }
+                    }
+                },
+                "runAfter": {
+                    "Compose_Validation_Output": [
+                        "Succeeded"
+                    ]
+                },
+                "else": {
+                    "actions": {
+                        "Response_Validation_Failed": {
+                            "type": "Response",
+                            "kind": "Http",
+                            "inputs": {
+                                "statusCode": 400,
+                                "headers": {
+                                    "Content-Type": "application/json"
+                                },
+                                "body": {
+                                    "status": "validation_failed",
+                                    "errorCode": "X12_850_SCHEMA_VALIDATION_ERROR",
+                                    "timestamp": "@utcNow()",
+                                    "validationOutput": "@outputs('Compose_Validation_Output')",
+                                    "validationErrors": "@coalesce(body('Validate_XML')?['Errors'], body('Validate_XML')?['errors'], array('No validation details available - check schema name and Integration Account'))",
+                                    "isValid": "@body('Validate_XML')?['IsValid']",
+                                    "message": "The transformed X12 850 XML does not conform to the schema",
+                                    "inputFile": "CSV received via HTTP",
+                                    "stage": "post_transformation",
+                                    "suggestion": "Check: 1) Schema 'X12_00401_850' exists in Integration Account, 2) XSLT uses correct element names (N1Loop not N1Loop1), 3) Integration Account is linked to Logic App",
+                                    "troubleshooting": {
+                                        "schemaName": "X12_00401_850",
+                                        "mapName": "CsvToX12_850",
+                                        "flatFileSchema": "orders-flatfile",
+                                        "requiredFiles": "See Day 5/schemas/ for correct versions"
+                                    }
+                                }
+                            },
+                            "runAfter": {}
+                        }
+                    }
+                },
+                "expression": {
+                    "or": [
+                        {
+                            "equals": [
+                                "@body('Validate_XML')?['IsValid']",
+                                true
+                            ]
+                        },
+                        {
+                            "equals": [
+                                "@actions('Validate_XML')['status']",
+                                "Succeeded"
+                            ]
+                        }
+                    ]
+                },
+                "type": "If"
+            }
+        },
+        "outputs": {},
+        "parameters": {
+            "$connections": {
+                "type": "Object",
+                "defaultValue": {}
+            }
+        }
+    },
+    "parameters": {
+        "$connections": {
+            "type": "Object",
+            "value": {
+                "x12": {
+                    "id": "/subscriptions/20cda7f0-c25d-4fc3-a336-2726df50af21/providers/Microsoft.Web/locations/uksouth/managedApis/x12",
+                    "connectionId": "/subscriptions/20cda7f0-c25d-4fc3-a336-2726df50af21/resourceGroups/CSV-to-X12-Blob-Processor_group/providers/Microsoft.Web/connections/x12",
+                    "connectionName": "x12",
+                    "connectionProperties": {}
+                }
+            }
+        }
+    }
+}

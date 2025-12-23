@@ -1,0 +1,13 @@
+{
+    "azureLogicAppsStandard.deploySubpath": ".",
+    "azureLogicAppsStandard.projectLanguage": "JavaScript",
+    "azureLogicAppsStandard.projectRuntime": "~4",
+    "debug.internalConsoleOptions": "neverOpen",
+    "azureFunctions.suppressProject": true,
+    "terminal.integrated.env.osx": {
+        "PATH": "/Users/trainer/.azurelogicapps/dependencies/DotNetSDK:${env:PATH}"
+    },
+    "omnisharp.dotNetCliPaths": [
+        "/Users/trainer/.azurelogicapps/dependencies/DotNetSDK"
+    ]
+}

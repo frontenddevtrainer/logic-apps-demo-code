@@ -1,0 +1,5 @@
+OrderNumber,OrderDate,BuyerId,BuyerName,SellerId,SellerName,ShipToName,ShipToId,ShipToStreet,ShipToCity,ShipToState,ShipToPostal,LineNumber,ItemSku,ItemDescription,Quantity,UOM,UnitPrice
+PO2025002,20251222,BUYER01,Contoso Retail,SELLER01,Fabrikam Supplies,Contoso DC,ST01,123 Warehouse Way,Seattle,WA,98101,1,ABC-100,Widget A,100,EA,12.50
+PO2025002,20251222,BUYER01,Contoso Retail,SELLER01,Fabrikam Supplies,Contoso DC,ST01,123 Warehouse Way,Seattle,WA,98101,2,XYZ-200,Widget B,50,EA,25.00
+PO2025002,20251222,BUYER01,Contoso Retail,SELLER01,Fabrikam Supplies,Contoso DC,ST01,123 Warehouse Way,Seattle,WA,98101,3,DEF-300,Gadget C,25,EA,45.00
+PO2025002,20251222,BUYER01,Contoso Retail,SELLER01,Fabrikam Supplies,Contoso DC,ST01,123 Warehouse Way,Seattle,WA,98101,4,GHI-400,Tool D,10,EA,99.99

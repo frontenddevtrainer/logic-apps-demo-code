@@ -1,0 +1,482 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "contentVersion": "1.0.0.0",
+        "triggers": {
+            "When_a_blob_is_added_or_modified_(properties_only)_(V2)": {
+                "recurrence": {
+                    "interval": 3,
+                    "frequency": "Minute"
+                },
+                "evaluatedRecurrence": {
+                    "interval": 3,
+                    "frequency": "Minute"
+                },
+                "splitOn": "@triggerBody()",
+                "metadata": {
+                    "JTJmaW5jb21pbmcteDEy": "/incoming-x12"
+                },
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azureblob']['connectionId']"
+                        }
+                    },
+                    "method": "get",
+                    "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/triggers/batch/onupdatedfile",
+                    "queries": {
+                        "folderId": "JTJmaW5jb21pbmcteDEy",
+                        "maxFileCount": 10,
+                        "checkBothCreatedAndModifiedDateTime": false
+                    }
+                }
+            }
+        },
+        "actions": {
+            "Initialize_CorrelationId": {
+                "runAfter": {},
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "correlationId",
+                            "type": "string",
+                            "value": "@{guid()}"
+                        }
+                    ]
+                }
+            },
+            "Initialize_ProcessingStatus": {
+                "runAfter": {
+                    "Initialize_CorrelationId": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "InitializeVariable",
+                "inputs": {
+                    "variables": [
+                        {
+                            "name": "processingStatus",
+                            "type": "string",
+                            "value": "started"
+                        }
+                    ]
+                }
+            },
+            "Get_X12_blob_content": {
+                "runAfter": {
+                    "Initialize_ProcessingStatus": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azureblob']['connectionId']"
+                        }
+                    },
+                    "method": "get",
+                    "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/files/@{encodeURIComponent(encodeURIComponent(triggerBody()?['Path']))}/content",
+                    "queries": {
+                        "inferContentType": true
+                    }
+                }
+            },
+            "Decode_X12_message": {
+                "runAfter": {
+                    "Get_X12_blob_content": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['x12']['connectionId']"
+                        }
+                    },
+                    "method": "post",
+                    "body": "@body('Get_X12_blob_content')",
+                    "path": "/decode"
+                }
+            },
+            "Parse_Decoded_X12": {
+                "runAfter": {
+                    "Decode_X12_message": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ParseJson",
+                "inputs": {
+                    "content": "@body('Decode_X12_message')",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "TransactionSets": {
+                                "type": "array"
+                            },
+                            "ISA": {
+                                "type": "object"
+                            },
+                            "GS": {
+                                "type": "object"
+                            },
+                            "ST": {
+                                "type": "object"
+                            }
+                        }
+                    }
+                }
+            },
+            "Extract_Control_Numbers": {
+                "runAfter": {
+                    "Parse_Decoded_X12": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Compose",
+                "inputs": {
+                    "interchangeControlNumber": "@body('Parse_Decoded_X12')?['ISA']?['ISA13']",
+                    "functionalGroupControlNumber": "@body('Parse_Decoded_X12')?['GS']?['GS06']",
+                    "transactionSetControlNumber": "@body('Parse_Decoded_X12')?['ST']?['ST02']",
+                    "senderId": "@body('Parse_Decoded_X12')?['ISA']?['ISA06']",
+                    "receiverId": "@body('Parse_Decoded_X12')?['ISA']?['ISA08']"
+                }
+            },
+            "Transform_to_Internal_Order_Format": {
+                "runAfter": {
+                    "Extract_Control_Numbers": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Compose",
+                "inputs": {
+                    "orderId": "@body('Parse_Decoded_X12')?['TransactionSets']?[0]?['BEG']?['BEG03']",
+                    "orderType": "PurchaseOrder",
+                    "orderDate": "@body('Parse_Decoded_X12')?['TransactionSets']?[0]?['BEG']?['BEG05']",
+                    "requestedDeliveryDate": "@body('Parse_Decoded_X12')?['TransactionSets']?[0]?['DTM']?[0]?['DTM02']",
+                    "customer": {
+                        "customerId": "@body('Parse_Decoded_X12')?['ISA']?['ISA06']",
+                        "name": "@body('Parse_Decoded_X12')?['TransactionSets']?[0]?['N1Loop']?[0]?['N1']?['N102']"
+                    },
+                    "supplier": {
+                        "supplierId": "@body('Parse_Decoded_X12')?['ISA']?['ISA08']"
+                    },
+                    "lineItems": "@body('Parse_Decoded_X12')?['TransactionSets']?[0]?['PO1Loop']",
+                    "status": "received",
+                    "metadata": {
+                        "receivedAt": "@utcNow()",
+                        "correlationId": "@variables('correlationId')",
+                        "source": "X12_EDI",
+                        "controlNumbers": "@outputs('Extract_Control_Numbers')"
+                    }
+                }
+            },
+            "Save_Decoded_JSON_to_Blob": {
+                "runAfter": {
+                    "Transform_to_Internal_Order_Format": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azureblob']['connectionId']"
+                        }
+                    },
+                    "method": "post",
+                    "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/files",
+                    "queries": {
+                        "folderPath": "/processed-orders",
+                        "name": "ORDER_@{outputs('Transform_to_Internal_Order_Format')?['orderId']}_@{formatDateTime(utcNow(), 'yyyyMMdd-HHmmss')}_@{variables('correlationId')}.json",
+                        "queryParametersSingleEncoded": true
+                    },
+                    "body": "@outputs('Transform_to_Internal_Order_Format')",
+                    "headers": {
+                        "ReadFileMetadataFromServer": true
+                    }
+                },
+                "runtimeConfiguration": {
+                    "contentTransfer": {
+                        "transferMode": "Chunked"
+                    }
+                }
+            },
+            "Build_997_Acknowledgment_XML": {
+                "runAfter": {
+                    "Save_Decoded_JSON_to_Blob": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Compose",
+                "inputs": "<X12Interchange xmlns=\"http://schemas.microsoft.com/BizTalk/EDI/X12/2006\">\n  <ISA>\n    <ISA01>00</ISA01>\n    <ISA02>          </ISA02>\n    <ISA03>00</ISA03>\n    <ISA04>          </ISA04>\n    <ISA05>ZZ</ISA05>\n    <ISA06>@{outputs('Extract_Control_Numbers')?['receiverId']}</ISA06>\n    <ISA07>ZZ</ISA07>\n    <ISA08>@{outputs('Extract_Control_Numbers')?['senderId']}</ISA08>\n    <ISA09>@{formatDateTime(utcNow(), 'yyMMdd')}</ISA09>\n    <ISA10>@{formatDateTime(utcNow(), 'HHmm')}</ISA10>\n    <ISA11>U</ISA11>\n    <ISA12>00401</ISA12>\n    <ISA13>@{outputs('Extract_Control_Numbers')?['interchangeControlNumber']}</ISA13>\n    <ISA14>0</ISA14>\n    <ISA15>P</ISA15>\n    <ISA16>:</ISA16>\n  </ISA>\n  <FunctionalGroup>\n    <GS>\n      <GS01>FA</GS01>\n      <GS02>@{outputs('Extract_Control_Numbers')?['receiverId']}</GS02>\n      <GS03>@{outputs('Extract_Control_Numbers')?['senderId']}</GS03>\n      <GS04>@{formatDateTime(utcNow(), 'yyyyMMdd')}</GS04>\n      <GS05>@{formatDateTime(utcNow(), 'HHmm')}</GS05>\n      <GS06>@{outputs('Extract_Control_Numbers')?['functionalGroupControlNumber']}</GS06>\n      <GS07>X</GS07>\n      <GS08>004010</GS08>\n    </GS>\n    <TransactionSet>\n      <ST>\n        <ST01>997</ST01>\n        <ST02>0001</ST02>\n      </ST>\n      <AK1>\n        <AK101>PO</AK101>\n        <AK102>@{outputs('Extract_Control_Numbers')?['functionalGroupControlNumber']}</AK102>\n      </AK1>\n      <AK2Loop1>\n        <AK2>\n          <AK201>850</AK201>\n          <AK202>@{outputs('Extract_Control_Numbers')?['transactionSetControlNumber']}</AK202>\n        </AK2>\n        <AK5>\n          <AK501>A</AK501>\n        </AK5>\n      </AK2Loop1>\n      <AK9>\n        <AK901>A</AK901>\n        <AK902>1</AK902>\n        <AK903>1</AK903>\n        <AK904>1</AK904>\n      </AK9>\n      <SE>\n        <SE01>6</SE01>\n        <SE02>0001</SE02>\n      </SE>\n    </TransactionSet>\n    <GE>\n      <GE01>1</GE01>\n      <GE02>@{outputs('Extract_Control_Numbers')?['functionalGroupControlNumber']}</GE02>\n    </GE>\n  </FunctionalGroup>\n  <IEA>\n    <IEA01>1</IEA01>\n    <IEA02>@{outputs('Extract_Control_Numbers')?['interchangeControlNumber']}</IEA02>\n  </IEA>\n</X12Interchange>"
+            },
+            "Encode_997_to_X12": {
+                "runAfter": {
+                    "Build_997_Acknowledgment_XML": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['x12']['connectionId']"
+                        }
+                    },
+                    "method": "post",
+                    "body": "@outputs('Build_997_Acknowledgment_XML')",
+                    "path": "/EncodeV2/ResolveByName",
+                    "queries": {
+                        "agreementName": "FabrikamSupplies_To_ContosoRetail_X12_997"
+                    }
+                }
+            },
+            "Save_997_Acknowledgment_to_Blob": {
+                "runAfter": {
+                    "Encode_997_to_X12": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azureblob']['connectionId']"
+                        }
+                    },
+                    "method": "post",
+                    "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/files",
+                    "queries": {
+                        "folderPath": "/acknowledgments-997",
+                        "name": "997_ACK_@{outputs('Extract_Control_Numbers')?['interchangeControlNumber']}_@{formatDateTime(utcNow(), 'yyyyMMdd-HHmmss')}.x12",
+                        "queryParametersSingleEncoded": true
+                    },
+                    "body": "@body('Encode_997_to_X12')",
+                    "headers": {
+                        "ReadFileMetadataFromServer": true
+                    }
+                },
+                "runtimeConfiguration": {
+                    "contentTransfer": {
+                        "transferMode": "Chunked"
+                    }
+                }
+            },
+            "Send_997_via_HTTP": {
+                "runAfter": {
+                    "Save_997_Acknowledgment_to_Blob": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Http",
+                "inputs": {
+                    "method": "POST",
+                    "uri": "https://partner-edi-endpoint.example.com/acknowledgments",
+                    "headers": {
+                        "Content-Type": "text/plain",
+                        "X-Correlation-Id": "@{variables('correlationId')}",
+                        "X-Message-Type": "X12-997"
+                    },
+                    "body": "@body('Encode_997_to_X12')"
+                }
+            },
+            "Forward_JSON_to_API": {
+                "runAfter": {
+                    "Send_997_via_HTTP": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Http",
+                "inputs": {
+                    "method": "POST",
+                    "uri": "https://your-order-api.example.com/api/orders",
+                    "headers": {
+                        "Content-Type": "application/json",
+                        "X-API-Key": "@parameters('orderApiKey')",
+                        "X-Correlation-Id": "@{variables('correlationId')}"
+                    },
+                    "body": "@outputs('Transform_to_Internal_Order_Format')"
+                }
+            },
+            "Update_Processing_Status": {
+                "runAfter": {
+                    "Forward_JSON_to_API": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "SetVariable",
+                "inputs": {
+                    "name": "processingStatus",
+                    "value": "completed"
+                }
+            },
+            "Create_Processing_Summary": {
+                "runAfter": {
+                    "Update_Processing_Status": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Compose",
+                "inputs": {
+                    "workflowStatus": "@variables('processingStatus')",
+                    "correlationId": "@variables('correlationId')",
+                    "timestamp": "@utcNow()",
+                    "processedFile": "@triggerBody()?['Name']",
+                    "steps": {
+                        "1_received": {
+                            "status": "success",
+                            "description": "X12 message received from blob storage",
+                            "fileName": "@triggerBody()?['Name']"
+                        },
+                        "2_decoded": {
+                            "status": "success",
+                            "description": "X12 850 message decoded to JSON",
+                            "orderId": "@outputs('Transform_to_Internal_Order_Format')?['orderId']"
+                        },
+                        "3_transformed": {
+                            "status": "success",
+                            "description": "Transformed to internal order format",
+                            "orderDate": "@outputs('Transform_to_Internal_Order_Format')?['orderDate']"
+                        },
+                        "4_saved_json": {
+                            "status": "success",
+                            "description": "Order JSON saved to blob storage",
+                            "path": "@body('Save_Decoded_JSON_to_Blob')?['Path']"
+                        },
+                        "5_generated_997": {
+                            "status": "success",
+                            "description": "997 Functional Acknowledgment generated",
+                            "controlNumbers": "@outputs('Extract_Control_Numbers')"
+                        },
+                        "6_saved_997": {
+                            "status": "success",
+                            "description": "997 acknowledgment saved to blob storage",
+                            "path": "@body('Save_997_Acknowledgment_to_Blob')?['Path']"
+                        },
+                        "7_sent_997": {
+                            "status": "success",
+                            "description": "997 acknowledgment sent to trading partner",
+                            "httpStatus": "@outputs('Send_997_via_HTTP')?['statusCode']"
+                        },
+                        "8_forwarded_json": {
+                            "status": "success",
+                            "description": "Order JSON forwarded to internal API",
+                            "apiStatus": "@outputs('Forward_JSON_to_API')?['statusCode']",
+                            "apiResponse": "@body('Forward_JSON_to_API')"
+                        }
+                    },
+                    "order": "@outputs('Transform_to_Internal_Order_Format')"
+                }
+            },
+            "Save_Processing_Summary": {
+                "runAfter": {
+                    "Create_Processing_Summary": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azureblob']['connectionId']"
+                        }
+                    },
+                    "method": "post",
+                    "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/files",
+                    "queries": {
+                        "folderPath": "/processing-logs",
+                        "name": "SUMMARY_@{variables('correlationId')}_@{formatDateTime(utcNow(), 'yyyyMMdd-HHmmss')}.json",
+                        "queryParametersSingleEncoded": true
+                    },
+                    "body": "@outputs('Create_Processing_Summary')",
+                    "headers": {
+                        "ReadFileMetadataFromServer": true
+                    }
+                },
+                "runtimeConfiguration": {
+                    "contentTransfer": {
+                        "transferMode": "Chunked"
+                    }
+                }
+            },
+            "Move_Original_to_Archive": {
+                "runAfter": {
+                    "Save_Processing_Summary": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azureblob']['connectionId']"
+                        }
+                    },
+                    "method": "post",
+                    "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/copyFile",
+                    "queries": {
+                        "source": "@triggerBody()?['Path']",
+                        "destination": "/archive-x12/@{triggerBody()?['Name']}",
+                        "overwrite": true,
+                        "queryParametersSingleEncoded": true
+                    }
+                }
+            },
+            "Delete_Original_File": {
+                "runAfter": {
+                    "Move_Original_to_Archive": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['azureblob']['connectionId']"
+                        }
+                    },
+                    "method": "delete",
+                    "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('AccountNameFromSettings'))}/files/@{encodeURIComponent(encodeURIComponent(triggerBody()?['Path']))}"
+                }
+            }
+        },
+        "outputs": {},
+        "parameters": {
+            "$connections": {
+                "type": "Object",
+                "defaultValue": {}
+            },
+            "orderApiKey": {
+                "type": "String",
+                "defaultValue": "your-api-key-here"
+            }
+        }
+    },
+    "parameters": {
+        "$connections": {
+            "type": "Object",
+            "value": {
+                "azureblob": {
+                    "id": "/subscriptions/20cda7f0-c25d-4fc3-a336-2726df50af21/providers/Microsoft.Web/locations/uksouth/managedApis/azureblob",
+                    "connectionId": "/subscriptions/20cda7f0-c25d-4fc3-a336-2726df50af21/resourceGroups/CSV-to-X12-Blob-Processor_group/providers/Microsoft.Web/connections/azureblob-1",
+                    "connectionName": "azureblob-1",
+                    "connectionProperties": {}
+                },
+                "x12": {
+                    "id": "/subscriptions/20cda7f0-c25d-4fc3-a336-2726df50af21/providers/Microsoft.Web/locations/uksouth/managedApis/x12",
+                    "connectionId": "/subscriptions/20cda7f0-c25d-4fc3-a336-2726df50af21/resourceGroups/CSV-to-X12-Blob-Processor_group/providers/Microsoft.Web/connections/x12",
+                    "connectionName": "x12",
+                    "connectionProperties": {}
+                }
+            }
+        },
+        "orderApiKey": {
+            "type": "String",
+            "value": "your-api-key-here"
+        }
+    }
+}

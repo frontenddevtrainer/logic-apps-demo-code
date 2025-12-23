@@ -1,0 +1,14 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "PG_HOST": "<your-postgresql-host>.postgres.database.azure.com",
+    "PG_DB": "<database-name>",
+    "PG_USER": "<username>",
+    "PG_PASSWORD": "<password>",
+    "PG_PORT": "5432",
+    "PG_SSLMODE": "require",
+    "PG_INSERT_PROC": "logicapp.insert_messages_batch"
+  }
+}

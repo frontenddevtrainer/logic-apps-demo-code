@@ -1,0 +1,63 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "type": "func",
+      "label": "func: host start",
+      "command": "host start",
+      "problemMatcher": "$func-python-watch",
+      "isBackground": true,
+      "dependsOn": "pip install (functions)"
+    },
+    {
+      "label": "pip install (functions)",
+      "type": "shell",
+      "osx": {
+        "command": "${config:azureFunctions.pythonVenv}/bin/python -m pip install -r requirements.txt"
+      },
+      "windows": {
+        "command": "${config:azureFunctions.pythonVenv}\\Scripts\\python -m pip install -r requirements.txt"
+      },
+      "linux": {
+        "command": "${config:azureFunctions.pythonVenv}/bin/python -m pip install -r requirements.txt"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "generateDebugSymbols",
+      "command": "${config:azureLogicAppsStandard.dotnetBinaryPath}",
+      "args": [
+        "${input:getDebugSymbolDll}"
+      ],
+      "type": "process",
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "type": "shell",
+      "command": "${config:azureLogicAppsStandard.funcCoreToolsBinaryPath}",
+      "args": [
+        "host",
+        "start"
+      ],
+      "options": {
+        "env": {
+          "PATH": "${config:azureLogicAppsStandard.autoRuntimeDependenciesPath}\\NodeJs;${config:azureLogicAppsStandard.autoRuntimeDependenciesPath}\\DotNetSDK;$env:PATH"
+        }
+      },
+      "problemMatcher": "$func-watch",
+      "isBackground": true,
+      "label": "func: host start",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "getDebugSymbolDll",
+      "type": "command",
+      "command": "azureLogicAppsStandard.getDebugSymbolDll"
+    }
+  ]
+}

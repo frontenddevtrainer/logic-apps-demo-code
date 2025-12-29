@@ -20,20 +20,6 @@
             }
         },
         "actions": {
-            "Decode_X12_message": {
-                "runAfter": {},
-                "type": "ApiConnection",
-                "inputs": {
-                    "host": {
-                        "connection": {
-                            "name": "@parameters('$connections')['x12']['connectionId']"
-                        }
-                    },
-                    "method": "post",
-                    "body": "@triggerBody()?['x12Message']",
-                    "path": "/decode"
-                }
-            },
             "Parse_Decoded_X12": {
                 "runAfter": {
                     "Decode_X12_message": [
@@ -123,13 +109,7 @@
                 }
             },
             "Process_Each_LineItem": {
-                "runAfter": {
-                    "Initialize_TotalAmount": [
-                        "Succeeded"
-                    ]
-                },
-                "type": "Foreach",
-                "foreach": "@outputs('Transform_to_Internal_Format')?['lineItems']",
+                "foreach": "@coalesce(outputs('Transform_to_Internal_Format')?['lineItems'], json('[]'))",
                 "actions": {
                     "Calculate_LineTotal": {
                         "type": "Compose",
@@ -177,7 +157,13 @@
                             "value": "@outputs('Calculate_LineTotal')"
                         }
                     }
-                }
+                },
+                "runAfter": {
+                    "Initialize_TotalAmount": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Foreach"
             },
             "Build_Final_Order_Object": {
                 "runAfter": {
@@ -208,8 +194,8 @@
                 },
                 "type": "Http",
                 "inputs": {
-                    "method": "POST",
                     "uri": "https://your-order-api.example.com/api/orders",
+                    "method": "POST",
                     "headers": {
                         "Content-Type": "application/json",
                         "X-API-Key": "@parameters('orderApiKey')"
@@ -238,35 +224,48 @@
                         "internalOrder": "@outputs('Build_Final_Order_Object')"
                     }
                 }
+            },
+            "Decode_X12_message": {
+                "runAfter": {},
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['x12']['connectionId']"
+                        }
+                    },
+                    "method": "post",
+                    "body": "@triggerBody()?['x12Message']",
+                    "path": "/decode"
+                }
             }
         },
         "outputs": {},
         "parameters": {
+            "orderApiKey": {
+                "defaultValue": "your-api-key-here",
+                "type": "String"
+            },
             "$connections": {
                 "type": "Object",
                 "defaultValue": {}
-            },
-            "orderApiKey": {
-                "type": "String",
-                "defaultValue": "your-api-key-here"
             }
         }
     },
     "parameters": {
+        "orderApiKey": {
+            "value": "your-api-key-here"
+        },
         "$connections": {
             "type": "Object",
             "value": {
                 "x12": {
                     "id": "/subscriptions/20cda7f0-c25d-4fc3-a336-2726df50af21/providers/Microsoft.Web/locations/uksouth/managedApis/x12",
-                    "connectionId": "/subscriptions/20cda7f0-c25d-4fc3-a336-2726df50af21/resourceGroups/CSV-to-X12-Blob-Processor_group/providers/Microsoft.Web/connections/x12",
+                    "connectionId": "/subscriptions/20cda7f0-c25d-4fc3-a336-2726df50af21/resourceGroups/demo/providers/Microsoft.Web/connections/x12",
                     "connectionName": "x12",
                     "connectionProperties": {}
                 }
             }
-        },
-        "orderApiKey": {
-            "type": "String",
-            "value": "your-api-key-here"
         }
     }
 }

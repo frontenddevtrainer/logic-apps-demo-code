@@ -1,0 +1,134 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "contentVersion": "1.0.0.0",
+        "triggers": {
+            "manual": {
+                "type": "Request",
+                "kind": "Http",
+                "inputs": {
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "x12Message": {
+                                "type": "string",
+                                "description": "Raw X12 850 Purchase Order message"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "actions": {
+            "Decode_X12_message": {
+                "runAfter": {},
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['x12']['connectionId']"
+                        }
+                    },
+                    "method": "post",
+                    "body": "@triggerBody()?['x12Message']",
+                    "path": "/decode"
+                }
+            },
+            "Parse_X12_Decoded_JSON": {
+                "runAfter": {
+                    "Decode_X12_message": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ParseJson",
+                "inputs": {
+                    "content": "@body('Decode_X12_message')",
+                    "schema": {
+                        "type": "object",
+                        "properties": {
+                            "TransactionSets": {
+                                "type": "array"
+                            },
+                            "ISA": {
+                                "type": "object"
+                            },
+                            "GS": {
+                                "type": "object"
+                            },
+                            "ST": {
+                                "type": "object"
+                            }
+                        }
+                    }
+                }
+            },
+            "Insert_row": {
+                "runAfter": {
+                    "Parse_X12_Decoded_JSON": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['postgresql']['connectionId']"
+                        }
+                    },
+                    "method": "post",
+                    "body": {
+                        "raw_x12_message": "@{triggerBody()?['x12Message']}",
+                        "decoded_json": "@{string(body('Parse_X12_Decoded_JSON'))}"
+                    },
+                    "path": "/datasets/default/tables/@{encodeURIComponent(encodeURIComponent('public.x12_messages'))}/items"
+                }
+            },
+            "Response": {
+                "runAfter": {
+                    "Insert_row": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Response",
+                "inputs": {
+                    "statusCode": 200,
+                    "headers": {
+                        "Content-Type": "application/json"
+                    },
+                    "body": {
+                        "status": "success",
+                        "message": "X12 message successfully stored in PostgreSQL",
+                        "messageId": "@{body('Insert_row')?['id']}",
+                        "timestamp": "@utcNow()"
+                    }
+                }
+            }
+        },
+        "outputs": {},
+        "parameters": {
+            "$connections": {
+                "type": "Object",
+                "defaultValue": {}
+            }
+        }
+    },
+    "parameters": {
+        "$connections": {
+            "type": "Object",
+            "value": {
+                "x12": {
+                    "id": "/subscriptions/20cda7f0-c25d-4fc3-a336-2726df50af21/providers/Microsoft.Web/locations/uksouth/managedApis/x12",
+                    "connectionId": "/subscriptions/20cda7f0-c25d-4fc3-a336-2726df50af21/resourceGroups/demo/providers/Microsoft.Web/connections/x12",
+                    "connectionName": "x12",
+                    "connectionProperties": {}
+                },
+                "postgresql": {
+                    "id": "/subscriptions/20cda7f0-c25d-4fc3-a336-2726df50af21/providers/Microsoft.Web/locations/uksouth/managedApis/postgresql",
+                    "connectionId": "/subscriptions/20cda7f0-c25d-4fc3-a336-2726df50af21/resourceGroups/demo/providers/Microsoft.Web/connections/postgresql",
+                    "connectionName": "postgresql",
+                    "connectionProperties": {}
+                }
+            }
+        }
+    }
+}

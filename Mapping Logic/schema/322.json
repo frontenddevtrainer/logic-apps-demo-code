@@ -1,0 +1,173 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "X12 322 Output",
+  "type": "object",
+  "properties": {
+    "transaction": {
+      "type": "object",
+      "properties": {
+        "controlNumber": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "event": {
+      "type": "object",
+      "properties": {
+        "statusCode": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "timeCode": { "type": "string" },
+        "actual": {
+          "type": "object",
+          "properties": {
+            "date": { "type": "string" },
+            "time": { "type": "string" },
+            "timeCode": { "type": "string" }
+          },
+          "additionalProperties": false
+        },
+        "location": {
+          "type": "object",
+          "properties": {
+            "qualifier": { "type": "string" },
+            "idQualifier": { "type": "string" },
+            "id": { "type": "string" },
+            "city": { "type": "string" },
+            "name": { "type": "string" },
+            "state": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "equipment": {
+      "type": "object",
+      "properties": {
+        "initial": { "type": "string" },
+        "number": { "type": "string" },
+        "grossWeight": { "type": "string" },
+        "weightQualifier": { "type": "string" },
+        "typeCode": { "type": "string" },
+        "type": { "type": "string" },
+        "loadStatus": { "type": "string" },
+        "conditionCode": { "type": "string" },
+        "temperature": { "type": "string" },
+        "isoCode": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "rail": {
+      "type": "object",
+      "properties": {
+        "equipmentInitial": { "type": "string" },
+        "equipmentNumber": { "type": "string" },
+        "equipmentTypeCode": { "type": "string" },
+        "equipmentType": { "type": "string" },
+        "statusCode": { "type": "string" },
+        "reportingInitial": { "type": "string" },
+        "reportingNumber": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "seal": {
+      "type": "object",
+      "properties": {
+        "number": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "parties": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "idQualifier": { "type": "string" },
+          "id": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "references": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "date": { "type": "string" },
+          "time": { "type": "string" },
+          "timeCode": { "type": "string" }
+        },
+        "additionalProperties": false
+      }
+    },
+    "lineItems": {
+      "type": "object",
+      "properties": {
+        "numbers": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "descriptions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "productIds": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "hazmat": {
+      "type": "object",
+      "properties": {
+        "unNumbers": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "classes": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "packingGroups": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "descriptions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "contacts": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "specialHandlingCodes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "relatedEquipment": {
+      "type": "object",
+      "properties": {
+        "initials": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "numbers": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "codes": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

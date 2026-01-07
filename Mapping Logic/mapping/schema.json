@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "X12 Mapping",
+  "type": "object",
+  "required": ["transactionSet"],
+  "properties": {
+    "client": { "type": "string" },
+    "transactionSet": { "type": "string" },
+    "extends": { "type": "string" },
+    "fields": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/field" }
+    },
+    "segmentRules": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/segmentRule" }
+    },
+    "overrides": {
+      "type": "object",
+      "properties": {
+        "fields": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/field" }
+        },
+        "segmentRules": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/segmentRule" }
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "field": {
+      "type": "object",
+      "required": ["segment", "element"],
+      "properties": {
+        "segment": { "type": "string" },
+        "element": { "type": "integer", "minimum": 1 },
+        "component": { "type": "integer", "minimum": 1 },
+        "when": { "$ref": "#/definitions/condition" },
+        "transform": { "type": "string" },
+        "valueMap": { "type": "object" },
+        "occurrence": {
+          "oneOf": [
+            { "type": "string", "enum": ["first", "last", "all"] },
+            { "type": "integer", "minimum": 1 }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "fieldMap": {
+      "type": "object",
+      "required": ["element"],
+      "properties": {
+        "element": { "type": "integer", "minimum": 1 },
+        "component": { "type": "integer", "minimum": 1 },
+        "transform": { "type": "string" },
+        "valueMap": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    "segmentRule": {
+      "type": "object",
+      "required": ["segment", "map"],
+      "properties": {
+        "segment": { "type": "string" },
+        "when": { "$ref": "#/definitions/condition" },
+        "whenAny": {
+          "type": "array",
+          "items": { "$ref": "#/definitions/condition" }
+        },
+        "map": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/fieldMap" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "condition": {
+      "type": "object",
+      "required": ["element"],
+      "properties": {
+        "element": { "type": "integer", "minimum": 1 },
+        "component": { "type": "integer", "minimum": 1 },
+        "equals": { "type": ["string", "number"] },
+        "in": {
+          "type": "array",
+          "items": { "type": ["string", "number"] }
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

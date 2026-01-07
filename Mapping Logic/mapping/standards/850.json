@@ -1,0 +1,25 @@
+{
+  "$schema": "../schema.json",
+  "transactionSet": "850",
+  "fields": {
+    "purchaseOrder.number": {
+      "segment": "BEG",
+      "element": 3
+    },
+    "purchaseOrder.date": {
+      "segment": "BEG",
+      "element": 5,
+      "transform": "date_yyyymmdd"
+    },
+    "buyer.id": {
+      "segment": "N1",
+      "element": 4,
+      "when": { "element": 1, "equals": "BY" }
+    },
+    "shipTo.id": {
+      "segment": "N1",
+      "element": 4,
+      "when": { "element": 1, "equals": "ST" }
+    }
+  }
+}

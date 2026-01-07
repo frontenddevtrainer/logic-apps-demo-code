@@ -1,0 +1,44 @@
+{
+  "$schema": "../../schema.json",
+  "client": "acme",
+  "transactionSet": "850",
+  "extends": "../../standards/850.json",
+  "overrides": {
+    "fields": {
+      "buyer.id": {
+        "segment": "N1",
+        "element": 2,
+        "when": { "element": 1, "equals": "BY" }
+      }
+    },
+    "segmentRules": [
+      {
+        "segment": "R4",
+        "whenAny": [
+          { "element": 1, "equals": "5" },
+          { "element": 1, "equals": "I" }
+        ],
+        "map": {
+          "event.location.id": { "element": 2 },
+          "event.location.city": { "element": 3 },
+          "event.location.state": { "element": 4 },
+          "event.location.country": { "element": 5 }
+        }
+      },
+      {
+        "segment": "N7",
+        "when": { "element": 11, "in": ["CC", "CH", "CN"] },
+        "map": {
+          "equipment.type": {
+            "element": 11,
+            "valueMap": {
+              "CC": "container_chassis",
+              "CH": "chassis_only",
+              "CN": "container_only"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

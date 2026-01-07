@@ -1,0 +1,362 @@
+{
+  "$schema": "../schema.json",
+  "transactionSet": "322",
+  "fields": {
+    "transaction.controlNumber": {
+      "segment": "ST",
+      "element": 2
+    },
+    "event.statusCode": {
+      "segment": "Q5",
+      "element": 1
+    },
+    "event.date": {
+      "segment": "Q5",
+      "element": 2,
+      "transform": "date_yyyymmdd"
+    },
+    "event.time": {
+      "segment": "Q5",
+      "element": 3
+    },
+    "event.timeCode": {
+      "segment": "Q5",
+      "element": 4
+    },
+    "event.actual.date": {
+      "segment": "DTM",
+      "element": 2,
+      "when": { "element": 1, "equals": "152" },
+      "transform": "date_yyyymmdd"
+    },
+    "event.actual.time": {
+      "segment": "DTM",
+      "element": 3,
+      "when": { "element": 1, "equals": "152" }
+    },
+    "event.actual.timeCode": {
+      "segment": "DTM",
+      "element": 4,
+      "when": { "element": 1, "equals": "152" }
+    },
+    "equipment.initial": {
+      "segment": "N7",
+      "element": 1
+    },
+    "equipment.number": {
+      "segment": "N7",
+      "element": 2
+    },
+    "equipment.grossWeight": {
+      "segment": "N7",
+      "element": 3
+    },
+    "equipment.weightQualifier": {
+      "segment": "N7",
+      "element": 4
+    },
+    "equipment.typeCode": {
+      "segment": "N7",
+      "element": 11
+    },
+    "equipment.loadStatus": {
+      "segment": "N7",
+      "element": 17
+    },
+    "equipment.conditionCode": {
+      "segment": "N7",
+      "element": 18
+    },
+    "equipment.temperature": {
+      "segment": "N7",
+      "element": 19
+    },
+    "equipment.isoCode": {
+      "segment": "N7",
+      "element": 22
+    },
+    "rail.equipmentInitial": {
+      "segment": "W2",
+      "element": 1
+    },
+    "rail.equipmentNumber": {
+      "segment": "W2",
+      "element": 2
+    },
+    "rail.equipmentTypeCode": {
+      "segment": "W2",
+      "element": 4
+    },
+    "rail.statusCode": {
+      "segment": "W2",
+      "element": 5
+    },
+    "rail.reportingInitial": {
+      "segment": "W2",
+      "element": 11
+    },
+    "rail.reportingNumber": {
+      "segment": "W2",
+      "element": 12
+    },
+    "seal.number": {
+      "segment": "M7",
+      "element": 1
+    },
+    "lineItems.numbers": {
+      "segment": "L0",
+      "element": 1,
+      "occurrence": "all"
+    },
+    "lineItems.descriptions": {
+      "segment": "L5",
+      "element": 2,
+      "occurrence": "all"
+    },
+    "lineItems.productIds": {
+      "segment": "L5",
+      "element": 3,
+      "occurrence": "all"
+    },
+    "hazmat.unNumbers": {
+      "segment": "H1",
+      "element": 1,
+      "occurrence": "all"
+    },
+    "hazmat.classes": {
+      "segment": "H1",
+      "element": 2,
+      "occurrence": "all"
+    },
+    "hazmat.packingGroups": {
+      "segment": "H1",
+      "element": 3,
+      "occurrence": "all"
+    },
+    "hazmat.descriptions": {
+      "segment": "H1",
+      "element": 4,
+      "occurrence": "all"
+    },
+    "hazmat.contacts": {
+      "segment": "H1",
+      "element": 5,
+      "occurrence": "all"
+    },
+    "hazmat.specialHandlingCodes": {
+      "segment": "H3",
+      "element": 1,
+      "occurrence": "all"
+    },
+    "relatedEquipment.initials": {
+      "segment": "NA",
+      "element": 3,
+      "occurrence": "all"
+    },
+    "relatedEquipment.numbers": {
+      "segment": "NA",
+      "element": 4,
+      "occurrence": "all"
+    },
+    "relatedEquipment.codes": {
+      "segment": "NA",
+      "element": 5,
+      "occurrence": "all"
+    }
+  },
+  "segmentRules": [
+    {
+      "segment": "N1",
+      "when": { "element": 1, "equals": "CN" },
+      "map": {
+        "parties.CN.name": { "element": 2 },
+        "parties.CN.idQualifier": { "element": 3 },
+        "parties.CN.id": { "element": 4 }
+      }
+    },
+    {
+      "segment": "N1",
+      "when": { "element": 1, "equals": "DR" },
+      "map": {
+        "parties.DR.name": { "element": 2 },
+        "parties.DR.idQualifier": { "element": 3 },
+        "parties.DR.id": { "element": 4 }
+      }
+    },
+    {
+      "segment": "N1",
+      "when": { "element": 1, "equals": "MC" },
+      "map": {
+        "parties.MC.name": { "element": 2 },
+        "parties.MC.idQualifier": { "element": 3 },
+        "parties.MC.id": { "element": 4 }
+      }
+    },
+    {
+      "segment": "N1",
+      "when": { "element": 1, "equals": "N1" },
+      "map": {
+        "parties.N1.name": { "element": 2 },
+        "parties.N1.idQualifier": { "element": 3 },
+        "parties.N1.id": { "element": 4 }
+      }
+    },
+    {
+      "segment": "N1",
+      "when": { "element": 1, "equals": "OR" },
+      "map": {
+        "parties.OR.name": { "element": 2 },
+        "parties.OR.idQualifier": { "element": 3 },
+        "parties.OR.id": { "element": 4 }
+      }
+    },
+    {
+      "segment": "N1",
+      "when": { "element": 1, "equals": "PF" },
+      "map": {
+        "parties.PF.name": { "element": 2 },
+        "parties.PF.idQualifier": { "element": 3 },
+        "parties.PF.id": { "element": 4 }
+      }
+    },
+    {
+      "segment": "N1",
+      "when": { "element": 1, "equals": "SH" },
+      "map": {
+        "parties.SH.name": { "element": 2 },
+        "parties.SH.idQualifier": { "element": 3 },
+        "parties.SH.id": { "element": 4 }
+      }
+    },
+    {
+      "segment": "N9",
+      "when": { "element": 1, "equals": "BM" },
+      "map": {
+        "references.BM.id": { "element": 2 },
+        "references.BM.date": { "element": 4, "transform": "date_yyyymmdd" },
+        "references.BM.time": { "element": 5 },
+        "references.BM.timeCode": { "element": 6 }
+      }
+    },
+    {
+      "segment": "N9",
+      "when": { "element": 1, "equals": "BN" },
+      "map": {
+        "references.BN.id": { "element": 2 },
+        "references.BN.date": { "element": 4, "transform": "date_yyyymmdd" },
+        "references.BN.time": { "element": 5 },
+        "references.BN.timeCode": { "element": 6 }
+      }
+    },
+    {
+      "segment": "N9",
+      "when": { "element": 1, "equals": "CG" },
+      "map": {
+        "references.CG.id": { "element": 2 },
+        "references.CG.date": { "element": 4, "transform": "date_yyyymmdd" },
+        "references.CG.time": { "element": 5 },
+        "references.CG.timeCode": { "element": 6 }
+      }
+    },
+    {
+      "segment": "N9",
+      "when": { "element": 1, "equals": "CN" },
+      "map": {
+        "references.CN.id": { "element": 2 },
+        "references.CN.date": { "element": 4, "transform": "date_yyyymmdd" },
+        "references.CN.time": { "element": 5 },
+        "references.CN.timeCode": { "element": 6 }
+      }
+    },
+    {
+      "segment": "N9",
+      "when": { "element": 1, "equals": "CO" },
+      "map": {
+        "references.CO.id": { "element": 2 },
+        "references.CO.date": { "element": 4, "transform": "date_yyyymmdd" },
+        "references.CO.time": { "element": 5 },
+        "references.CO.timeCode": { "element": 6 }
+      }
+    },
+    {
+      "segment": "N9",
+      "when": { "element": 1, "equals": "CR" },
+      "map": {
+        "references.CR.id": { "element": 2 },
+        "references.CR.date": { "element": 4, "transform": "date_yyyymmdd" },
+        "references.CR.time": { "element": 5 },
+        "references.CR.timeCode": { "element": 6 }
+      }
+    },
+    {
+      "segment": "N9",
+      "when": { "element": 1, "equals": "PO" },
+      "map": {
+        "references.PO.id": { "element": 2 },
+        "references.PO.date": { "element": 4, "transform": "date_yyyymmdd" },
+        "references.PO.time": { "element": 5 },
+        "references.PO.timeCode": { "element": 6 }
+      }
+    },
+    {
+      "segment": "N9",
+      "when": { "element": 1, "equals": "SI" },
+      "map": {
+        "references.SI.id": { "element": 2 },
+        "references.SI.date": { "element": 4, "transform": "date_yyyymmdd" },
+        "references.SI.time": { "element": 5 },
+        "references.SI.timeCode": { "element": 6 }
+      }
+    },
+    {
+      "segment": "N9",
+      "when": { "element": 1, "equals": "SO" },
+      "map": {
+        "references.SO.id": { "element": 2 },
+        "references.SO.date": { "element": 4, "transform": "date_yyyymmdd" },
+        "references.SO.time": { "element": 5 },
+        "references.SO.timeCode": { "element": 6 }
+      }
+    },
+    {
+      "segment": "N9",
+      "when": { "element": 1, "equals": "TI" },
+      "map": {
+        "references.TI.id": { "element": 2 },
+        "references.TI.date": { "element": 4, "transform": "date_yyyymmdd" },
+        "references.TI.time": { "element": 5 },
+        "references.TI.timeCode": { "element": 6 }
+      }
+    },
+    {
+      "segment": "N9",
+      "when": { "element": 1, "equals": "UT" },
+      "map": {
+        "references.UT.id": { "element": 2 },
+        "references.UT.date": { "element": 4, "transform": "date_yyyymmdd" },
+        "references.UT.time": { "element": 5 },
+        "references.UT.timeCode": { "element": 6 }
+      }
+    },
+    {
+      "segment": "N9",
+      "when": { "element": 1, "equals": "WY" },
+      "map": {
+        "references.WY.id": { "element": 2 },
+        "references.WY.date": { "element": 4, "transform": "date_yyyymmdd" },
+        "references.WY.time": { "element": 5 },
+        "references.WY.timeCode": { "element": 6 }
+      }
+    },
+    {
+      "segment": "N9",
+      "when": { "element": 1, "equals": "ZZ" },
+      "map": {
+        "references.ZZ.id": { "element": 2 },
+        "references.ZZ.date": { "element": 4, "transform": "date_yyyymmdd" },
+        "references.ZZ.time": { "element": 5 },
+        "references.ZZ.timeCode": { "element": 6 }
+      }
+    }
+  ]
+}

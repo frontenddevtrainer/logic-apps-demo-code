@@ -1,0 +1,47 @@
+{
+  "$schema": "../../schema.json",
+  "client": "real-sample",
+  "transactionSet": "322",
+  "extends": "../../standards/322.json",
+  "overrides": {
+    "fields": {
+      "equipment.type": {
+        "segment": "N7",
+        "element": 11,
+        "valueMap": {
+          "CC": "container_chassis",
+          "CH": "chassis_only",
+          "CN": "container_only",
+          "TL": "trailer"
+        }
+      },
+      "rail.equipmentType": {
+        "segment": "W2",
+        "element": 4,
+        "valueMap": {
+          "CC": "container_chassis",
+          "CH": "chassis_only",
+          "CN": "container_only",
+          "TL": "trailer"
+        }
+      }
+    },
+    "segmentRules": [
+      {
+        "segment": "R4",
+        "whenAny": [
+          { "element": 1, "equals": "5" },
+          { "element": 1, "equals": "I" }
+        ],
+        "map": {
+          "event.location.qualifier": { "element": 1 },
+          "event.location.idQualifier": { "element": 2 },
+          "event.location.id": { "element": 3 },
+          "event.location.city": { "element": 4 },
+          "event.location.name": { "element": 6 },
+          "event.location.state": { "element": 8 }
+        }
+      }
+    ]
+  }
+}

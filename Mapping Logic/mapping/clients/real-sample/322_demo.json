@@ -1,0 +1,30 @@
+{
+  "$schema": "../../schema.json",
+  "client": "real-sample",
+  "transactionSet": "322",
+  "extends": "../../standards/322.json",
+  "fields": {
+    "equipment.second.initial": {
+      "segment": "N7",
+      "element": 1,
+      "occurrence": 2
+    },
+    "equipment.second.number": {
+      "segment": "N7",
+      "element": 2,
+      "occurrence": 2
+    },
+    "references.BN.second": {
+      "segment": "N9",
+      "element": 2,
+      "when": { "element": 1, "equals": "BN" },
+      "occurrence": 2
+    },
+    "references.BN.all": {
+      "segment": "N9",
+      "element": 2,
+      "when": { "element": 1, "equals": "BN" },
+      "occurrence": "all"
+    }
+  }
+}

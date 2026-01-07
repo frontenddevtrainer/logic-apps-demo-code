@@ -1,0 +1,97 @@
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "triggers": {
+      "manual": {
+        "type": "Request",
+        "kind": "Http",
+        "inputs": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "x12": {
+                "type": "string",
+                "description": "Raw X12 message"
+              },
+              "client": {
+                "type": "string"
+              },
+              "transactionSet": {
+                "type": "string"
+              },
+              "mappingPath": {
+                "type": "string"
+              },
+              "mappingBlobUrl": {
+                "type": "string"
+              },
+              "mappingContainer": {
+                "type": "string"
+              },
+              "mappingRoot": {
+                "type": "string"
+              },
+              "includeMeta": {
+                "type": "boolean"
+              },
+              "elementSeparator": {
+                "type": "string"
+              },
+              "segmentSeparator": {
+                "type": "string"
+              },
+              "componentSeparator": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "x12"
+            ]
+          }
+        }
+      }
+    },
+    "actions": {
+      "Map_X12_to_JSON": {
+        "runAfter": {},
+        "type": "Http",
+        "inputs": {
+          "uri": "@parameters('functionUrl')",
+          "method": "POST",
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": "@triggerBody()"
+        }
+      },
+      "Response": {
+        "runAfter": {
+          "Map_X12_to_JSON": [
+            "Succeeded"
+          ]
+        },
+        "type": "Response",
+        "inputs": {
+          "statusCode": 200,
+          "headers": {
+            "Content-Type": "application/json"
+          },
+          "body": "@body('Map_X12_to_JSON')"
+        }
+      }
+    },
+    "outputs": {},
+    "parameters": {
+      "functionUrl": {
+        "type": "String",
+        "defaultValue": "https://x12-mapping.azurewebsites.net/api/x12-map"
+      }
+    }
+  },
+  "parameters": {
+    "functionUrl": {
+      "value": "https://x12-mapping.azurewebsites.net/api/x12-map"
+    }
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "AzureWebJobsStorage": "",
+    "MAPPING_STORAGE_CONNECTION": "",
+    "MAPPING_CONTAINER": "x12-mappings",
+    "MAPPING_ROOT": "mapping"
+  }
+}

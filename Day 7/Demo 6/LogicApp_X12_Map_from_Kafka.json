@@ -1,0 +1,109 @@
+{
+    "definition": {
+        "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+        "contentVersion": "1.0.0.0",
+        "triggers": {
+            "When_events_are_available_in_Event_Hub": {
+                "recurrence": {
+                    "interval": 30,
+                    "frequency": "Second",
+                    "timeZone": "UTC"
+                },
+                "evaluatedRecurrence": {
+                    "interval": 30,
+                    "frequency": "Second",
+                    "timeZone": "UTC"
+                },
+                "splitOn": "@triggerBody()",
+                "type": "ApiConnection",
+                "inputs": {
+                    "host": {
+                        "connection": {
+                            "name": "@parameters('$connections')['eventhubs']['connectionId']"
+                        }
+                    },
+                    "method": "get",
+                    "path": "/@{encodeURIComponent('x12-messages')}/events/batch/head",
+                    "queries": {
+                        "contentType": "application/octet-stream",
+                        "consumerGroupName": "$Default",
+                        "maximumEventsCount": 50
+                    }
+                }
+            }
+        },
+        "actions": {
+            "Parse_Kafka_Message": {
+                "runAfter": {},
+                "type": "Compose",
+                "inputs": "@json(base64ToString(triggerBody()?['ContentData']))"
+            },
+            "Map_X12_to_JSON": {
+                "runAfter": {
+                    "Parse_Kafka_Message": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Http",
+                "inputs": {
+                    "uri": "@parameters('functionUrl')",
+                    "method": "POST",
+                    "headers": {
+                        "Content-Type": "application/json"
+                    },
+                    "body": "@outputs('Parse_Kafka_Message')"
+                }
+            },
+            "Compose_Mapped_Output": {
+                "runAfter": {
+                    "Map_X12_to_JSON": [
+                        "Succeeded"
+                    ]
+                },
+                "type": "Compose",
+                "inputs": "@body('Map_X12_to_JSON')"
+            }
+        },
+        "outputs": {},
+        "parameters": {
+            "functionUrl": {
+                "defaultValue": "https://x12-mapping.azurewebsites.net/api/x12-map",
+                "type": "String"
+            },
+            "eventHubName": {
+                "defaultValue": "x12-messages",
+                "type": "String"
+            },
+            "consumerGroup": {
+                "defaultValue": "logicapp",
+                "type": "String"
+            },
+            "$connections": {
+                "type": "Object",
+                "defaultValue": {}
+            }
+        }
+    },
+    "parameters": {
+        "functionUrl": {
+            "value": "https://x12-mapping.azurewebsites.net/api/x12-map"
+        },
+        "eventHubName": {
+            "value": "x12-messages"
+        },
+        "consumerGroup": {
+            "value": "logicapp"
+        },
+        "$connections": {
+            "type": "Object",
+            "value": {
+                "eventhubs": {
+                    "id": "/subscriptions/20cda7f0-c25d-4fc3-a336-2726df50af21/providers/Microsoft.Web/locations/uksouth/managedApis/eventhubs",
+                    "connectionId": "/subscriptions/20cda7f0-c25d-4fc3-a336-2726df50af21/resourceGroups/rg-logic-apps-demo-day7/providers/Microsoft.Web/connections/eventhubs",
+                    "connectionName": "eventhubs",
+                    "connectionProperties": {}
+                }
+            }
+        }
+    }
+}

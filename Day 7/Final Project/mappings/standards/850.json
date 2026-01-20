@@ -1,0 +1,203 @@
+{
+  "description": "X12 850 Purchase Order to JSON mapping",
+  "version": "1.0",
+  "transactionSet": "850",
+  "fields": {
+    "purchaseOrderNumber": {
+      "segment": "BEG",
+      "element": 3,
+      "description": "Purchase Order Number"
+    },
+    "purchaseOrderDate": {
+      "segment": "BEG",
+      "element": 5,
+      "transform": "date_yyyymmdd",
+      "description": "Purchase Order Date"
+    },
+    "purchaseOrderType": {
+      "segment": "BEG",
+      "element": 1,
+      "valueMap": {
+        "00": "Original",
+        "01": "Cancellation",
+        "05": "Replace",
+        "06": "Confirmation",
+        "07": "Duplicate"
+      },
+      "description": "Transaction Set Purpose Code"
+    },
+    "purchaseOrderTypeCode": {
+      "segment": "BEG",
+      "element": 2,
+      "valueMap": {
+        "SA": "Stand-alone Order",
+        "NE": "New Order",
+        "RC": "Release of Existing Contract",
+        "RO": "Rush Order"
+      },
+      "description": "Purchase Order Type Code"
+    },
+    "contractNumber": {
+      "segment": "BEG",
+      "element": 4,
+      "description": "Release Number or Contract Number"
+    },
+    "currency": {
+      "segment": "CUR",
+      "element": 2,
+      "description": "Currency Code"
+    },
+    "requestedDeliveryDate": {
+      "segment": "DTM",
+      "element": 2,
+      "when": {
+        "element": 1,
+        "equals": "002"
+      },
+      "transform": "date_yyyymmdd",
+      "description": "Requested Delivery Date"
+    },
+    "shipDate": {
+      "segment": "DTM",
+      "element": 2,
+      "when": {
+        "element": 1,
+        "equals": "010"
+      },
+      "transform": "date_yyyymmdd",
+      "description": "Requested Ship Date"
+    }
+  },
+  "segmentRules": [
+    {
+      "segment": "N1",
+      "when": {
+        "element": 1,
+        "equals": "BY"
+      },
+      "map": {
+        "buyer.qualifierCode": { "element": 3 },
+        "buyer.id": { "element": 4 },
+        "buyer.name": { "element": 2 }
+      },
+      "description": "Buyer/Buying Party"
+    },
+    {
+      "segment": "N1",
+      "when": {
+        "element": 1,
+        "equals": "SE"
+      },
+      "map": {
+        "seller.qualifierCode": { "element": 3 },
+        "seller.id": { "element": 4 },
+        "seller.name": { "element": 2 }
+      },
+      "description": "Seller/Selling Party"
+    },
+    {
+      "segment": "N1",
+      "when": {
+        "element": 1,
+        "equals": "ST"
+      },
+      "map": {
+        "shipTo.qualifierCode": { "element": 3 },
+        "shipTo.id": { "element": 4 },
+        "shipTo.name": { "element": 2 }
+      },
+      "description": "Ship To Party"
+    },
+    {
+      "segment": "N1",
+      "when": {
+        "element": 1,
+        "equals": "BT"
+      },
+      "map": {
+        "billTo.qualifierCode": { "element": 3 },
+        "billTo.id": { "element": 4 },
+        "billTo.name": { "element": 2 }
+      },
+      "description": "Bill To Party"
+    },
+    {
+      "segment": "N3",
+      "map": {
+        "address.street1": { "element": 1 },
+        "address.street2": { "element": 2 }
+      },
+      "description": "Address Information"
+    },
+    {
+      "segment": "N4",
+      "map": {
+        "address.city": { "element": 1 },
+        "address.state": { "element": 2 },
+        "address.postalCode": { "element": 3 },
+        "address.country": { "element": 4 }
+      },
+      "description": "Geographic Location"
+    },
+    {
+      "segment": "PER",
+      "when": {
+        "element": 1,
+        "equals": "BD"
+      },
+      "map": {
+        "buyer.contactName": { "element": 2 },
+        "buyer.phoneQualifier": { "element": 3 },
+        "buyer.phone": { "element": 4 },
+        "buyer.emailQualifier": { "element": 5 },
+        "buyer.email": { "element": 6 }
+      },
+      "description": "Buyer Contact Information"
+    },
+    {
+      "segment": "PO1",
+      "map": {
+        "items[].lineNumber": { "element": 1 },
+        "items[].quantity": { "element": 2, "transform": "number" },
+        "items[].unitOfMeasure": { "element": 3 },
+        "items[].unitPrice": { "element": 4, "transform": "number" },
+        "items[].basisOfUnitPrice": { "element": 5 },
+        "items[].productIdQualifier": { "element": 6 },
+        "items[].productId": { "element": 7 },
+        "items[].productIdQualifier2": { "element": 8 },
+        "items[].vendorProductId": { "element": 9 }
+      },
+      "description": "Baseline Item Data"
+    },
+    {
+      "segment": "PID",
+      "when": {
+        "element": 1,
+        "equals": "F"
+      },
+      "map": {
+        "items[].description": { "element": 5 }
+      },
+      "description": "Product/Item Description"
+    },
+    {
+      "segment": "CTT",
+      "map": {
+        "summary.totalLineItems": { "element": 1 },
+        "summary.hashTotal": { "element": 2 }
+      },
+      "description": "Transaction Totals"
+    },
+    {
+      "segment": "AMT",
+      "when": {
+        "element": 1,
+        "equals": "TT"
+      },
+      "map": {
+        "summary.totalAmount": { "element": 2, "transform": "number" }
+      },
+      "description": "Total Transaction Amount"
+    }
+  ]
+}

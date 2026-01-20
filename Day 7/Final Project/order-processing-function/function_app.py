@@ -261,6 +261,38 @@ def x12_map(req: func.HttpRequest) -> func.HttpResponse:
 # ORDER VALIDATION FUNCTIONS
 # =============================================================================
 
+def normalize_items(order: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Normalize items from mapped order - handles both array and single object formats.
+    The mapper outputs 'items[]' as an object (last item wins) when array syntax is used.
+    """
+    # Check for items[] (object from mapper's literal interpretation)
+    items_obj = order.get("items[]")
+    if items_obj and isinstance(items_obj, dict):
+        # Convert string numbers to actual numbers
+        item = {}
+        for k, v in items_obj.items():
+            if k in ("quantity", "unitPrice") and isinstance(v, str):
+                try:
+                    item[k] = float(v)
+                except ValueError:
+                    item[k] = v
+            else:
+                item[k] = v
+        return [item]
+
+    # Check for items array
+    items = order.get("items", [])
+    if isinstance(items, list):
+        return items
+
+    # Check for single item object
+    if isinstance(items, dict):
+        return [items]
+
+    return []
+
+
 def validate_mapped_order(order: Dict[str, Any]) -> Dict[str, Any]:
     """
     Validate mapped order data from X12 850.
@@ -288,8 +320,8 @@ def validate_mapped_order(order: Dict[str, Any]) -> Dict[str, Any]:
     if not buyer.get("name"):
         warnings.append("buyer.name is recommended (N1-BY)")
 
-    # Validate items
-    items = order.get("items", [])
+    # Normalize and validate items
+    items = normalize_items(order)
     if not items:
         errors.append("At least one line item is required (PO1)")
     else:
@@ -301,12 +333,26 @@ def validate_mapped_order(order: Dict[str, Any]) -> Dict[str, Any]:
                 errors.append(f"{item_prefix}.productId is required (PO1-07)")
 
             quantity = item.get("quantity")
+            # Handle string quantities from mapping
+            if isinstance(quantity, str):
+                try:
+                    quantity = float(quantity)
+                except ValueError:
+                    pass
+
             if quantity is None:
                 errors.append(f"{item_prefix}.quantity is required (PO1-02)")
             elif not isinstance(quantity, (int, float)) or quantity <= 0:
                 errors.append(f"{item_prefix}.quantity must be positive")
 
             unit_price = item.get("unitPrice")
+            # Handle string prices from mapping
+            if isinstance(unit_price, str):
+                try:
+                    unit_price = float(unit_price)
+                except ValueError:
+                    pass
+
             if unit_price is None:
                 warnings.append(f"{item_prefix}.unitPrice is recommended (PO1-04)")
             elif isinstance(unit_price, (int, float)) and unit_price >= 0:
@@ -323,13 +369,26 @@ def validate_mapped_order(order: Dict[str, Any]) -> Dict[str, Any]:
     }
 
     if is_valid and items:
-        calculated_total = sum(
-            (item.get("quantity", 0) * item.get("unitPrice", 0))
-            for item in items
-            if isinstance(item.get("quantity"), (int, float)) and isinstance(item.get("unitPrice"), (int, float))
-        )
+        calculated_total = 0
+        for item in items:
+            qty = item.get("quantity", 0)
+            price = item.get("unitPrice", 0)
+            if isinstance(qty, str):
+                try:
+                    qty = float(qty)
+                except ValueError:
+                    qty = 0
+            if isinstance(price, str):
+                try:
+                    price = float(price)
+                except ValueError:
+                    price = 0
+            if isinstance(qty, (int, float)) and isinstance(price, (int, float)):
+                calculated_total += qty * price
         result["calculatedTotal"] = round(calculated_total, 2)
         result["itemCount"] = len(items)
+        # Store normalized items back to order for database storage
+        order["_normalized_items"] = items
 
     return result
 
@@ -375,8 +434,21 @@ def store_order_in_postgres(order_id: str, order: Dict[str, Any], validation: Di
                 order.get("notes", "")
             ))
 
-            # Insert order items
-            for item in order.get("items", []):
+            # Insert order items (use normalized items if available)
+            items = order.get("_normalized_items") or normalize_items(order)
+            for item in items:
+                qty = item.get("quantity", 0)
+                price = item.get("unitPrice", 0)
+                if isinstance(qty, str):
+                    try:
+                        qty = float(qty)
+                    except ValueError:
+                        qty = 0
+                if isinstance(price, str):
+                    try:
+                        price = float(price)
+                    except ValueError:
+                        price = 0
                 cur.execute("""
                     INSERT INTO order_items (
                         order_id, product_id, product_name, quantity,
@@ -386,9 +458,9 @@ def store_order_in_postgres(order_id: str, order: Dict[str, Any], validation: Di
                     order_id,
                     item.get("productId", ""),
                     item.get("description", ""),
-                    item.get("quantity", 0),
-                    item.get("unitPrice", 0),
-                    item.get("quantity", 0) * item.get("unitPrice", 0)
+                    qty,
+                    price,
+                    qty * price
                 ))
 
             conn.commit()

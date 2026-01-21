@@ -1,0 +1,530 @@
+# GitHub Actions Workflow for X12 850 Order Processing System
+#
+# This workflow deploys the complete order processing infrastructure to Azure:
+# - Resource Group
+# - Storage Account with blob containers
+# - PostgreSQL Flexible Server with schema
+# - Azure Function App
+# - Logic App (Standard)
+#
+# Prerequisites:
+# 1. Create an Azure Service Principal and add as GitHub Secret (AZURE_CREDENTIALS)
+#    az ad sp create-for-rbac --name "github-actions-sp" --role contributor \
+#      --scopes /subscriptions/{subscription-id} --sdk-auth
+#
+# 2. Add the following secrets to your GitHub repository:
+#    - AZURE_CREDENTIALS: JSON output from the command above
+#    - POSTGRES_PASSWORD: Secure password for PostgreSQL admin user
+
+name: Deploy Order Processing System
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'Day 7/Final Project/**'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'Day 7/Final Project/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      skip_postgres:
+        description: 'Skip PostgreSQL deployment'
+        required: false
+        default: false
+        type: boolean
+      skip_function:
+        description: 'Skip Function App deployment'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  AZURE_FUNCTIONAPP_PACKAGE_PATH: 'Day 7/Final Project/order-processing-function'
+  LOGIC_APP_PACKAGE_PATH: 'Day 7/Final Project/final-project-logic-app/final-project-logic-app'
+  PYTHON_VERSION: '3.11'
+  DOTNET_VERSION: '8.0.x'
+  # Default resource names (can be overridden per environment)
+  RESOURCE_GROUP: 'rg-order-processing'
+  LOCATION: 'uksouth'
+  MAPPING_CONTAINER: 'x12-mappings'
+  ORDER_CONTAINER: 'order-documents'
+
+jobs:
+  # =============================================================================
+  # Build and Test Job
+  # =============================================================================
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: 'Day 7/Final Project/order-processing-function'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+          cache-dependency-path: 'Day 7/Final Project/order-processing-function/requirements.txt'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov flake8
+
+      - name: Lint with flake8
+        run: |
+          # Stop the build if there are Python syntax errors or undefined names
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          # Exit-zero treats all errors as warnings
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: Validate Logic App workflow
+        working-directory: 'Day 7/Final Project/final-project-logic-app/final-project-logic-app'
+        run: |
+          # Basic JSON syntax validation for workflow
+          python -c "import json; json.load(open('FinalProject/workflow.json'))"
+          echo "Logic App workflow JSON is valid"
+
+      - name: Upload Function App artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: function-app
+          path: ${{ env.AZURE_FUNCTIONAPP_PACKAGE_PATH }}
+          retention-days: 5
+
+      - name: Upload Logic App artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: logic-app
+          path: ${{ env.LOGIC_APP_PACKAGE_PATH }}
+          retention-days: 5
+
+  # =============================================================================
+  # Infrastructure Deployment Job
+  # =============================================================================
+  deploy-infrastructure:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.event_name != 'pull_request'
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+
+    outputs:
+      resource_group: ${{ steps.set-vars.outputs.RESOURCE_GROUP }}
+      storage_account: ${{ steps.deploy-storage.outputs.storage_account }}
+      storage_connection: ${{ steps.deploy-storage.outputs.storage_connection }}
+      postgres_host: ${{ steps.deploy-postgres.outputs.postgres_host }}
+      function_app: ${{ steps.deploy-function.outputs.function_app }}
+      function_url: ${{ steps.deploy-function.outputs.function_url }}
+      logic_app: ${{ steps.set-vars.outputs.LOGIC_APP }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set environment-specific variables
+        id: set-vars
+        run: |
+          ENV="${{ github.event.inputs.environment || 'dev' }}"
+          SUFFIX=$(echo $RANDOM | md5sum | head -c 6)
+
+          echo "RESOURCE_GROUP=rg-order-processing-${ENV}" >> $GITHUB_OUTPUT
+          echo "STORAGE_ACCOUNT=orderproc${ENV}${SUFFIX}" >> $GITHUB_OUTPUT
+          echo "POSTGRES_SERVER=order-db-${ENV}-${SUFFIX}" >> $GITHUB_OUTPUT
+          echo "FUNCTION_APP=order-func-${ENV}-${SUFFIX}" >> $GITHUB_OUTPUT
+          echo "LOGIC_APP=order-logic-${ENV}" >> $GITHUB_OUTPUT
+
+      - name: Create Resource Group
+        run: |
+          az group create \
+            --name "${{ steps.set-vars.outputs.RESOURCE_GROUP }}" \
+            --location "${{ env.LOCATION }}" \
+            --tags environment="${{ github.event.inputs.environment || 'dev' }}" project="order-processing"
+
+      # -------------------------------------------------------------------------
+      # Storage Account
+      # -------------------------------------------------------------------------
+      - name: Deploy Storage Account
+        id: deploy-storage
+        run: |
+          STORAGE_ACCOUNT="${{ steps.set-vars.outputs.STORAGE_ACCOUNT }}"
+          RG="${{ steps.set-vars.outputs.RESOURCE_GROUP }}"
+
+          echo "Creating storage account: $STORAGE_ACCOUNT"
+          az storage account create \
+            --name "$STORAGE_ACCOUNT" \
+            --resource-group "$RG" \
+            --location "${{ env.LOCATION }}" \
+            --sku Standard_LRS \
+            --kind StorageV2 \
+            --https-only true \
+            --min-tls-version TLS1_2
+
+          # Get connection string
+          STORAGE_CONN=$(az storage account show-connection-string \
+            --name "$STORAGE_ACCOUNT" \
+            --resource-group "$RG" \
+            --query connectionString -o tsv)
+
+          # Create containers
+          az storage container create \
+            --name "${{ env.MAPPING_CONTAINER }}" \
+            --connection-string "$STORAGE_CONN"
+
+          az storage container create \
+            --name "${{ env.ORDER_CONTAINER }}" \
+            --connection-string "$STORAGE_CONN"
+
+          # Upload mapping file
+          az storage blob upload \
+            --container-name "${{ env.MAPPING_CONTAINER }}" \
+            --name "mapping/standards/850.json" \
+            --file "Day 7/Final Project/mappings/standards/850.json" \
+            --connection-string "$STORAGE_CONN" \
+            --overwrite
+
+          echo "storage_account=$STORAGE_ACCOUNT" >> $GITHUB_OUTPUT
+          echo "storage_connection=$STORAGE_CONN" >> $GITHUB_OUTPUT
+
+      # -------------------------------------------------------------------------
+      # PostgreSQL
+      # -------------------------------------------------------------------------
+      - name: Deploy PostgreSQL
+        id: deploy-postgres
+        if: ${{ github.event.inputs.skip_postgres != 'true' }}
+        run: |
+          POSTGRES_SERVER="${{ steps.set-vars.outputs.POSTGRES_SERVER }}"
+          RG="${{ steps.set-vars.outputs.RESOURCE_GROUP }}"
+          POSTGRES_DB="order_processing"
+          POSTGRES_USER="orderadmin"
+          POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}"
+
+          echo "Creating PostgreSQL Flexible Server: $POSTGRES_SERVER"
+          az postgres flexible-server create \
+            --name "$POSTGRES_SERVER" \
+            --resource-group "$RG" \
+            --location "${{ env.LOCATION }}" \
+            --admin-user "$POSTGRES_USER" \
+            --admin-password "$POSTGRES_PASSWORD" \
+            --sku-name Standard_B1ms \
+            --tier Burstable \
+            --storage-size 32 \
+            --version 14 \
+            --yes
+
+          # Allow Azure services
+          az postgres flexible-server firewall-rule create \
+            --resource-group "$RG" \
+            --name "$POSTGRES_SERVER" \
+            --rule-name AllowAzureServices \
+            --start-ip-address 0.0.0.0 \
+            --end-ip-address 0.0.0.0
+
+          # Create database
+          az postgres flexible-server db create \
+            --resource-group "$RG" \
+            --server-name "$POSTGRES_SERVER" \
+            --database-name "$POSTGRES_DB"
+
+          POSTGRES_HOST="${POSTGRES_SERVER}.postgres.database.azure.com"
+          echo "postgres_host=$POSTGRES_HOST" >> $GITHUB_OUTPUT
+
+      - name: Run Database Schema
+        if: ${{ github.event.inputs.skip_postgres != 'true' }}
+        env:
+          PGPASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+        run: |
+          POSTGRES_SERVER="${{ steps.set-vars.outputs.POSTGRES_SERVER }}"
+          POSTGRES_HOST="${POSTGRES_SERVER}.postgres.database.azure.com"
+
+          # Allow GitHub runner IP temporarily
+          RUNNER_IP=$(curl -s https://api.ipify.org)
+          az postgres flexible-server firewall-rule create \
+            --resource-group "${{ steps.set-vars.outputs.RESOURCE_GROUP }}" \
+            --name "$POSTGRES_SERVER" \
+            --rule-name AllowGitHubRunner \
+            --start-ip-address "$RUNNER_IP" \
+            --end-ip-address "$RUNNER_IP" || true
+
+          # Wait for firewall rule to propagate
+          sleep 30
+
+          # Run schema
+          psql -h "$POSTGRES_HOST" \
+            -U "orderadmin" \
+            -d "order_processing" \
+            -f "Day 7/Final Project/database/schema.sql" || echo "Schema may already exist"
+
+          # Clean up firewall rule
+          az postgres flexible-server firewall-rule delete \
+            --resource-group "${{ steps.set-vars.outputs.RESOURCE_GROUP }}" \
+            --name "$POSTGRES_SERVER" \
+            --rule-name AllowGitHubRunner \
+            --yes || true
+
+      # -------------------------------------------------------------------------
+      # Function App
+      # -------------------------------------------------------------------------
+      - name: Deploy Function App
+        id: deploy-function
+        if: ${{ github.event.inputs.skip_function != 'true' }}
+        run: |
+          FUNCTION_APP="${{ steps.set-vars.outputs.FUNCTION_APP }}"
+          RG="${{ steps.set-vars.outputs.RESOURCE_GROUP }}"
+          STORAGE_ACCOUNT="${{ steps.deploy-storage.outputs.storage_account }}"
+          POSTGRES_SERVER="${{ steps.set-vars.outputs.POSTGRES_SERVER }}"
+          POSTGRES_HOST="${POSTGRES_SERVER}.postgres.database.azure.com"
+
+          echo "Creating Function App: $FUNCTION_APP"
+          az functionapp create \
+            --name "$FUNCTION_APP" \
+            --resource-group "$RG" \
+            --consumption-plan-location "${{ env.LOCATION }}" \
+            --runtime python \
+            --runtime-version 3.11 \
+            --functions-version 4 \
+            --storage-account "$STORAGE_ACCOUNT" \
+            --os-type Linux
+
+          # Get storage connection string
+          STORAGE_CONN=$(az storage account show-connection-string \
+            --name "$STORAGE_ACCOUNT" \
+            --resource-group "$RG" \
+            --query connectionString -o tsv)
+
+          # Configure app settings
+          az functionapp config appsettings set \
+            --name "$FUNCTION_APP" \
+            --resource-group "$RG" \
+            --settings \
+              MAPPING_STORAGE_CONNECTION="$STORAGE_CONN" \
+              MAPPING_CONTAINER="${{ env.MAPPING_CONTAINER }}" \
+              MAPPING_ROOT="mapping" \
+              ORDER_STORAGE_CONNECTION="$STORAGE_CONN" \
+              ORDER_CONTAINER="${{ env.ORDER_CONTAINER }}" \
+              POSTGRES_HOST="$POSTGRES_HOST" \
+              POSTGRES_DB="order_processing" \
+              POSTGRES_USER="orderadmin" \
+              POSTGRES_PASSWORD="${{ secrets.POSTGRES_PASSWORD }}" \
+              POSTGRES_PORT="5432" \
+              POSTGRES_SSLMODE="require"
+
+          FUNCTION_URL="https://${FUNCTION_APP}.azurewebsites.net/api/process-order"
+          echo "function_app=$FUNCTION_APP" >> $GITHUB_OUTPUT
+          echo "function_url=$FUNCTION_URL" >> $GITHUB_OUTPUT
+
+  # =============================================================================
+  # Deploy Function App Code
+  # =============================================================================
+  deploy-function-code:
+    name: Deploy Function Code
+    runs-on: ubuntu-latest
+    needs: deploy-infrastructure
+    if: github.event_name != 'pull_request' && github.event.inputs.skip_function != 'true'
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: function-app
+          path: ./function-app
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install Azure Functions Core Tools
+        run: |
+          curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > microsoft.gpg
+          sudo mv microsoft.gpg /etc/apt/trusted.gpg.d/microsoft.gpg
+          sudo sh -c 'echo "deb [arch=amd64] https://packages.microsoft.com/repos/microsoft-ubuntu-$(lsb_release -cs)-prod $(lsb_release -cs) main" > /etc/apt/sources.list.d/dotnetdev.list'
+          sudo apt-get update
+          sudo apt-get install azure-functions-core-tools-4
+
+      - name: Deploy Function App
+        working-directory: ./function-app
+        run: |
+          pip install -r requirements.txt
+          func azure functionapp publish "${{ needs.deploy-infrastructure.outputs.function_app }}" --python
+
+  # =============================================================================
+  # Deploy Logic App (Standard)
+  # =============================================================================
+  deploy-logic-app:
+    name: Deploy Logic App (Standard)
+    runs-on: ubuntu-latest
+    needs: [deploy-infrastructure, deploy-function-code]
+    if: github.event_name != 'pull_request'
+    environment: ${{ github.event.inputs.environment || 'dev' }}
+
+    outputs:
+      logic_app_url: ${{ steps.deploy-logic.outputs.logic_app_url }}
+
+    steps:
+      - name: Download Logic App artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: logic-app
+          path: ./logic-app
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Create Logic App (Standard) Infrastructure
+        id: create-logic-app
+        run: |
+          RG="${{ needs.deploy-infrastructure.outputs.resource_group }}"
+          LOGIC_APP="${{ needs.deploy-infrastructure.outputs.logic_app }}"
+          STORAGE_ACCOUNT="${{ needs.deploy-infrastructure.outputs.storage_account }}"
+          LOCATION="${{ env.LOCATION }}"
+
+          echo "Creating App Service Plan for Logic App: $LOGIC_APP"
+
+          # Create App Service Plan (Workflow Standard WS1)
+          az appservice plan create \
+            --name "${LOGIC_APP}-plan" \
+            --resource-group "$RG" \
+            --location "$LOCATION" \
+            --sku WS1 \
+            --is-linux false
+
+          # Create Logic App (Standard)
+          az logicapp create \
+            --name "$LOGIC_APP" \
+            --resource-group "$RG" \
+            --plan "${LOGIC_APP}-plan" \
+            --storage-account "$STORAGE_ACCOUNT"
+
+          # Configure Logic App settings
+          FUNCTION_URL="${{ needs.deploy-infrastructure.outputs.function_url }}"
+          STORAGE_CONN=$(az storage account show-connection-string \
+            --name "$STORAGE_ACCOUNT" \
+            --resource-group "$RG" \
+            --query connectionString -o tsv)
+
+          az logicapp config appsettings set \
+            --name "$LOGIC_APP" \
+            --resource-group "$RG" \
+            --settings \
+              "AzureWebJobsStorage=$STORAGE_CONN" \
+              "FUNCTIONS_EXTENSION_VERSION=~4" \
+              "FUNCTIONS_WORKER_RUNTIME=dotnet" \
+              "APP_KIND=workflowapp" \
+              "functionAppUrl=$FUNCTION_URL"
+
+      - name: Install Azure Functions Core Tools
+        run: |
+          curl https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor > microsoft.gpg
+          sudo mv microsoft.gpg /etc/apt/trusted.gpg.d/microsoft.gpg
+          sudo sh -c 'echo "deb [arch=amd64] https://packages.microsoft.com/repos/microsoft-ubuntu-$(lsb_release -cs)-prod $(lsb_release -cs) main" > /etc/apt/sources.list.d/dotnetdev.list'
+          sudo apt-get update
+          sudo apt-get install azure-functions-core-tools-4
+
+      - name: Deploy Logic App Workflows
+        id: deploy-logic
+        working-directory: ./logic-app
+        run: |
+          RG="${{ needs.deploy-infrastructure.outputs.resource_group }}"
+          LOGIC_APP="${{ needs.deploy-infrastructure.outputs.logic_app }}"
+
+          echo "Deploying Logic App workflows to: $LOGIC_APP"
+
+          # Deploy using func (Logic Apps Standard uses the same deployment as Functions)
+          func azure functionapp publish "$LOGIC_APP"
+
+          # Get Logic App callback URL
+          SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+
+          # Wait for deployment to complete
+          sleep 30
+
+          LOGIC_APP_URL=$(az rest \
+            --method POST \
+            --uri "https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/${RG}/providers/Microsoft.Web/sites/${LOGIC_APP}/hostruntime/runtime/webhooks/workflow/api/management/workflows/FinalProject/triggers/HTTP_Request_-_Receive_X12_Order/listCallbackUrl?api-version=2022-03-01" \
+            --query value -o tsv 2>/dev/null || echo "URL available in Azure Portal")
+
+          echo "logic_app_url=$LOGIC_APP_URL" >> $GITHUB_OUTPUT
+
+  # =============================================================================
+  # Summary Job
+  # =============================================================================
+  deployment-summary:
+    name: Deployment Summary
+    runs-on: ubuntu-latest
+    needs: [deploy-infrastructure, deploy-function-code, deploy-logic-app]
+    if: always() && github.event_name != 'pull_request'
+
+    steps:
+      - name: Print Deployment Summary
+        run: |
+          echo "=========================================="
+          echo "Deployment Summary"
+          echo "=========================================="
+          echo ""
+          echo "Environment: ${{ github.event.inputs.environment || 'dev' }}"
+          echo ""
+          echo "Storage Account: ${{ needs.deploy-infrastructure.outputs.storage_account }}"
+          echo "PostgreSQL Host: ${{ needs.deploy-infrastructure.outputs.postgres_host }}"
+          echo "Function App:    ${{ needs.deploy-infrastructure.outputs.function_app }}"
+          echo "Function URL:    ${{ needs.deploy-infrastructure.outputs.function_url }}"
+          echo "Logic App URL:   ${{ needs.deploy-logic-app.outputs.logic_app_url }}"
+          echo ""
+          echo "=========================================="
+
+      - name: Create GitHub Deployment Status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const summary = `
+            ## Deployment Complete
+
+            | Resource | Value |
+            |----------|-------|
+            | Environment | ${{ github.event.inputs.environment || 'dev' }} |
+            | Storage Account | ${{ needs.deploy-infrastructure.outputs.storage_account }} |
+            | PostgreSQL Host | ${{ needs.deploy-infrastructure.outputs.postgres_host }} |
+            | Function App | ${{ needs.deploy-infrastructure.outputs.function_app }} |
+            | Function URL | ${{ needs.deploy-infrastructure.outputs.function_url }} |
+
+            ### Test the deployment
+            \`\`\`bash
+            curl -X POST "${{ needs.deploy-infrastructure.outputs.function_url }}" \\
+              -H "Content-Type: application/json" \\
+              -d '{"x12": "ISA*00*...", "transactionSet": "850"}'
+            \`\`\`
+            `;
+
+            await core.summary.addRaw(summary).write();

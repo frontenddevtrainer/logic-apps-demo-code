@@ -1,0 +1,17 @@
+{
+  "folders": [
+    {
+      "name": "final-project-logic-app",
+      "path": "./final-project-logic-app"
+    }
+  ],
+  "settings": {
+    "terminal.integrated.env.osx": {
+      "PATH": "/Users/trainer/.azurelogicapps/dependencies/DotNetSDK:${env:PATH}"
+    },
+    "omnisharp.dotNetCliPaths": [
+      "/Users/trainer/.azurelogicapps/dependencies/DotNetSDK"
+    ],
+    "debug.internalConsoleOptions": "neverOpen"
+  }
+}

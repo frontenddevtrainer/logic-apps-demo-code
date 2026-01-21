@@ -7,12 +7,13 @@
 # - Storage Account (for mappings and order documents)
 # - PostgreSQL Flexible Server
 # - Azure Function App
-# - Logic App
+# - Logic App (Standard)
 #
 # Usage:
 #   ./deploy.sh                    # Deploy with default settings
 #   ./deploy.sh --skip-postgres    # Skip PostgreSQL creation (use existing)
 #   ./deploy.sh --skip-function    # Skip Function App deployment
+#   ./deploy.sh --skip-logic-app   # Skip Logic App deployment
 #   ./deploy.sh --cleanup          # Delete all resources
 #
 set -euo pipefail
@@ -29,11 +30,13 @@ POSTGRES_USER="${POSTGRES_USER:-orderadmin}"
 POSTGRES_PASSWORD="${POSTGRES_PASSWORD:-}"
 FUNCTION_APP="${FUNCTION_APP:-order-processing-func-$RANDOM}"
 LOGIC_APP="${LOGIC_APP:-order-processing-logic}"
+LOGIC_APP_PLAN="${LOGIC_APP_PLAN:-${LOGIC_APP}-plan}"
 
 MAPPING_CONTAINER="x12-mappings"
 ORDER_CONTAINER="order-documents"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+LOGIC_APP_PATH="$SCRIPT_DIR/final-project-logic-app/final-project-logic-app"
 
 # =============================================================================
 # Helper Functions
@@ -227,22 +230,60 @@ create_function_app() {
 }
 
 create_logic_app() {
-  log "Creating Logic App: $LOGIC_APP"
+  log "Creating Logic App (Standard): $LOGIC_APP"
 
   FUNCTION_URL="https://$FUNCTION_APP.azurewebsites.net/api/process-order"
-
-  az deployment group create \
+  STORAGE_CONN=$(az storage account show-connection-string \
+    --name "$STORAGE_ACCOUNT" \
     --resource-group "$RESOURCE_GROUP" \
-    --template-file "$SCRIPT_DIR/LogicApp_Order_Processing.json" \
-    --parameters \
-      logicAppName="$LOGIC_APP" \
-      functionAppUrl="$FUNCTION_URL" \
+    --query connectionString -o tsv)
+
+  # Create App Service Plan for Logic App (Workflow Standard WS1)
+  log "Creating App Service Plan: $LOGIC_APP_PLAN"
+  az appservice plan create \
+    --name "$LOGIC_APP_PLAN" \
+    --resource-group "$RESOURCE_GROUP" \
+    --location "$LOCATION" \
+    --sku WS1 \
+    --is-linux false \
     --output none
 
+  # Create Logic App (Standard)
+  log "Creating Logic App (Standard) resource..."
+  az logicapp create \
+    --name "$LOGIC_APP" \
+    --resource-group "$RESOURCE_GROUP" \
+    --plan "$LOGIC_APP_PLAN" \
+    --storage-account "$STORAGE_ACCOUNT" \
+    --output none
+
+  # Configure Logic App settings
+  log "Configuring Logic App settings..."
+  az logicapp config appsettings set \
+    --name "$LOGIC_APP" \
+    --resource-group "$RESOURCE_GROUP" \
+    --settings \
+      "AzureWebJobsStorage=$STORAGE_CONN" \
+      "FUNCTIONS_EXTENSION_VERSION=~4" \
+      "FUNCTIONS_WORKER_RUNTIME=dotnet" \
+      "APP_KIND=workflowapp" \
+      "functionAppUrl=$FUNCTION_URL" \
+    --output none
+
+  # Deploy Logic App workflows
+  log "Deploying Logic App workflows..."
+  cd "$LOGIC_APP_PATH"
+  func azure functionapp publish "$LOGIC_APP"
+  cd "$SCRIPT_DIR"
+
+  # Wait for deployment to complete
+  sleep 10
+
   log "Getting Logic App callback URL..."
+  SUBSCRIPTION_ID=$(az account show --query id -o tsv)
   LOGIC_APP_URL=$(az rest \
     --method POST \
-    --uri "https://management.azure.com/subscriptions/$(az account show --query id -o tsv)/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Logic/workflows/$LOGIC_APP/triggers/HTTP_Request_-_Receive_X12_Order/listCallbackUrl?api-version=2016-06-01" \
+    --uri "https://management.azure.com/subscriptions/${SUBSCRIPTION_ID}/resourceGroups/$RESOURCE_GROUP/providers/Microsoft.Web/sites/${LOGIC_APP}/hostruntime/runtime/webhooks/workflow/api/management/workflows/FinalProject/triggers/HTTP_Request_-_Receive_X12_Order/listCallbackUrl?api-version=2022-03-01" \
     --query value -o tsv 2>/dev/null || echo "URL will be available in Azure Portal")
 }
 
@@ -267,11 +308,13 @@ print_summary() {
   echo "  - X12 Map:       https://$FUNCTION_APP.azurewebsites.net/api/x12-map"
   echo "  - Process Order: https://$FUNCTION_APP.azurewebsites.net/api/process-order"
   echo ""
-  echo "Logic App:         $LOGIC_APP"
+  echo "Logic App (Standard): $LOGIC_APP"
+  echo "  - Plan:          $LOGIC_APP_PLAN"
+  echo "  - Workflow:      FinalProject"
   if [[ -n "${LOGIC_APP_URL:-}" && "$LOGIC_APP_URL" != "URL will be available in Azure Portal" ]]; then
     echo "  - Endpoint:      $LOGIC_APP_URL"
   else
-    echo "  - Endpoint:      (Get from Azure Portal > Logic App > Overview)"
+    echo "  - Endpoint:      (Get from Azure Portal > Logic App > Workflows > FinalProject)"
   fi
   echo ""
   echo "=========================================="
@@ -292,6 +335,7 @@ print_summary() {
 # =============================================================================
 SKIP_POSTGRES=false
 SKIP_FUNCTION=false
+SKIP_LOGIC_APP=false
 
 while [[ $# -gt 0 ]]; do
   case $1 in
@@ -304,6 +348,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --skip-function)
       SKIP_FUNCTION=true
+      shift
+      ;;
+    --skip-logic-app)
+      SKIP_LOGIC_APP=true
       shift
       ;;
     *)
@@ -334,5 +382,10 @@ else
   log "Skipping Function App deployment (--skip-function)"
 fi
 
-create_logic_app
+if [[ "$SKIP_LOGIC_APP" == "false" ]]; then
+  create_logic_app
+else
+  log "Skipping Logic App deployment (--skip-logic-app)"
+fi
+
 print_summary

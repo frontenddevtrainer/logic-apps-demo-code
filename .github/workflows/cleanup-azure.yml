@@ -1,0 +1,84 @@
+# GitHub Actions Workflow to Clean Up Azure Resources
+#
+# This workflow deletes all resources for a specific environment.
+# Use with caution - this is destructive and cannot be undone!
+
+name: Cleanup Azure Resources
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to clean up'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      confirm:
+        description: 'Type "DELETE" to confirm deletion'
+        required: true
+        type: string
+
+env:
+  LOCATION: 'uksouth'
+
+jobs:
+  cleanup:
+    name: Delete Resources
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm == 'DELETE'
+
+    steps:
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Delete Resource Group
+        run: |
+          RG="rg-order-processing-${{ github.event.inputs.environment }}"
+
+          echo "Deleting resource group: $RG"
+          echo "This will delete ALL resources in the group!"
+
+          # Check if resource group exists
+          if az group exists --name "$RG" | grep -q true; then
+            az group delete \
+              --name "$RG" \
+              --yes \
+              --no-wait
+            echo "Resource group deletion initiated: $RG"
+            echo "Note: Deletion may take several minutes to complete."
+          else
+            echo "Resource group does not exist: $RG"
+          fi
+
+      - name: Summary
+        run: |
+          echo "=========================================="
+          echo "Cleanup Summary"
+          echo "=========================================="
+          echo ""
+          echo "Environment: ${{ github.event.inputs.environment }}"
+          echo "Resource Group: rg-order-processing-${{ github.event.inputs.environment }}"
+          echo "Status: Deletion initiated (async)"
+          echo ""
+          echo "=========================================="
+
+  abort:
+    name: Abort - Confirmation Failed
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm != 'DELETE'
+
+    steps:
+      - name: Abort Message
+        run: |
+          echo "Cleanup aborted!"
+          echo ""
+          echo "You entered: '${{ github.event.inputs.confirm }}'"
+          echo "Expected: 'DELETE'"
+          echo ""
+          echo "To delete resources, you must type 'DELETE' exactly."
+          exit 1

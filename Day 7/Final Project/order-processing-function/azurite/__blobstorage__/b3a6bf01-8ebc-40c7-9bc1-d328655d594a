@@ -1,0 +1,108 @@
+{
+  "name": "X12 850 Purchase Order",
+  "version": "1.0",
+  "fields": {
+    "purchaseOrderNumber": {"segment": "BEG", "element": 2},
+    "purchaseOrderDate": {"segment": "BEG", "element": 4},
+    "buyer.id": {"segment": "N1", "qualifier": {"element": 0, "value": "BY"}, "element": 3},
+    "buyer.name": {"segment": "N1", "qualifier": {"element": 0, "value": "BY"}, "element": 1},
+    "seller.id": {"segment": "N1", "qualifier": {"element": 0, "value": "SE"}, "element": 3},
+    "seller.name": {"segment": "N1", "qualifier": {"element": 0, "value": "SE"}, "element": 1},
+    "items[].productId": {"segment": "PO1", "element": 6},
+    "items[].quantity": {"segment": "PO1", "element": 1},
+    "items[].unitPrice": {"segment": "PO1", "element": 3},
+    "items[].description": {"segment": "PID", "element": 4}
+  }
+}{
+  "orderId": "ORD-20260122-111C6BD5",
+  "orderDate": "2026-01-22T19:10:39.691598Z",
+  "status": "pending",
+  "originalX12": "ISA*00*          *00*          *ZZ*SENDER         *ZZ*RECEIVER       *230101*1200*U*00401*000000001*0*P*:~GS*PO*SENDER*RECEIVER*20230101*1200*1*X*004010~ST*850*0001~BEG*00*NE*PO12345**20230101~N1*BY*Acme Corp*92*BUYER123~N1*SE*Supplier Inc*92*SELL456~PO1*1*10*EA*25.00*PE*VP*PROD001*UP*123456789~PID*F****Widget A~CTT*1~SE*9*0001~GE*1*1~IEA*1*000000001~",
+  "mappedOrder": {
+    "purchaseOrderNumber": "NE",
+    "purchaseOrderDate": "",
+    "buyer": {
+      "id": "92",
+      "name": "BY"
+    },
+    "seller": {
+      "id": "92",
+      "name": "BY"
+    },
+    "items[]": {
+      "productId": "VP",
+      "quantity": "1",
+      "unitPrice": "EA",
+      "description": ""
+    },
+    "_normalized_items": [
+      {
+        "productId": "VP",
+        "quantity": 1.0,
+        "unitPrice": "EA",
+        "description": ""
+      }
+    ]
+  },
+  "validation": {
+    "isValid": true,
+    "errors": [],
+    "warnings": [
+      "purchaseOrderDate is recommended (BEG05)"
+    ],
+    "validatedAt": "2026-01-22T19:10:39.701690Z",
+    "calculatedTotal": 0.0,
+    "itemCount": 1
+  },
+  "metadata": {
+    "createdAt": "2026-01-22T19:10:39.691598Z",
+    "source": "X12-850-OrderProcessing",
+    "version": "1.0"
+  }
+}{
+  "orderId": "ORD-20260122-D4B3370C",
+  "orderDate": "2026-01-22T19:14:01.894680Z",
+  "status": "pending",
+  "originalX12": "ISA*00*          *00*          *ZZ*SENDER         *ZZ*RECEIVER       *230101*1200*U*00401*000000001*0*P*:~GS*PO*SENDER*RECEIVER*20230101*1200*1*X*004010~ST*850*0001~BEG*00*NE*PO12345**20230101~N1*BY*Acme Corp*92*BUYER123~N1*SE*Supplier Inc*92*SELL456~PO1*1*10*EA*25.00*PE*VP*PROD001*UP*123456789~PID*F****Widget A~CTT*1~SE*9*0001~GE*1*1~IEA*1*000000001~",
+  "mappedOrder": {
+    "purchaseOrderNumber": "NE",
+    "purchaseOrderDate": "",
+    "buyer": {
+      "id": "92",
+      "name": "BY"
+    },
+    "seller": {
+      "id": "92",
+      "name": "BY"
+    },
+    "items[]": {
+      "productId": "VP",
+      "quantity": "1",
+      "unitPrice": "EA",
+      "description": ""
+    },
+    "_normalized_items": [
+      {
+        "productId": "VP",
+        "quantity": 1.0,
+        "unitPrice": "EA",
+        "description": ""
+      }
+    ]
+  },
+  "validation": {
+    "isValid": true,
+    "errors": [],
+    "warnings": [
+      "purchaseOrderDate is recommended (BEG05)"
+    ],
+    "validatedAt": "2026-01-22T19:14:01.916202Z",
+    "calculatedTotal": 0.0,
+    "itemCount": 1
+  },
+  "metadata": {
+    "createdAt": "2026-01-22T19:14:01.894680Z",
+    "source": "X12-850-OrderProcessing",
+    "version": "1.0"
+  }
+}

@@ -221,3 +221,25 @@ To enable database storage, configure PostgreSQL settings in `local.settings.jso
   }
 }
 ```
+
+
+
+cd "/Users/trainer/logic-apps-demo/Day 7/Final Project/order-processing-function" && source venv/bin/activate && python3 << 'EOF'
+from azure.storage.blob import BlobServiceClient
+
+conn_str = "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;"
+
+service = BlobServiceClient.from_connection_string(conn_str)
+
+print("=== Blob Container Contents ===\n")
+for container in service.list_containers():
+    print(f"Container: {container.name}")
+    print("-" * 40)
+    container_client = service.get_container_client(container.name)
+    blobs = list(container_client.list_blobs())
+    if not blobs:
+        print("  (empty)")
+    for blob in blobs:
+        print(f"  - {blob.name} ({blob.size} bytes)")
+    print()
+EOF

@@ -1,0 +1,5 @@
+{
+  "functionAppUrl": {
+    "value": "https://order-processing-func-13332.azurewebsites.net/api/process-order?code=AW_4_OZmvTVxe3PUHT784vEfV_JXkGHRU6if1hRVX4PzAzFukz0dKQ=="
+  }
+}

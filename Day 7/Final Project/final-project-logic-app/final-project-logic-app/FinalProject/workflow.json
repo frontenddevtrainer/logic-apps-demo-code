@@ -5,7 +5,7 @@
     "parameters": {
       "functionAppUrl": {
         "type": "String",
-        "defaultValue": ""
+        "defaultValue": "https://order-processing-func-13332.azurewebsites.net/api/process-order?code=AW_4_OZmvTVxe3PUHT784vEfV_JXkGHRU6if1hRVX4PzAzFukz0dKQ=="
       }
     },
     "triggers": {
@@ -64,11 +64,11 @@
         "runAfter": {},
         "inputs": {
           "method": "POST",
-          "uri": "@{parameters('functionAppUrl')}",
+          "uri": "@appsetting('functionAppUrl')",
           "headers": {
             "Content-Type": "application/json"
           },
-          "body": "@triggerBody()"
+          "body": "@addProperty(triggerBody(), 'transactionSet', coalesce(triggerBody()?['transactionSet'], '850'))"
         }
       },
       "Parse_Function_Response": {

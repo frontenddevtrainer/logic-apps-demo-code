@@ -95,6 +95,12 @@ Final Project/
 ### 1. Create Azure Resources
 
 ```bash
+# Activate Azurite 
+set AZURITE_ACCOUNTS="account1:key1:key2"
+
+# on windows use set
+export AZURITE_CONNECTION_STRING='DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFeqCnf2L+ZzqQ7yF0+XkX7m7Z5eKxF5AqzJv9xq0x6VJ+VjN5E4xV4l0v9oJ0+QJw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;'
+
 # Create resource group
 az group create --name rg-order-processing --location eastus
 
@@ -104,6 +110,17 @@ az storage account create \
   --resource-group rg-order-processing \
   --location eastus \
   --sku Standard_LRS
+
+
+
+# Copy Files to container
+
+az storage blob upload \
+  --container-name mycontainer \
+  --name mappings/standards/850.json \
+  --file mappings/standards/850.json \
+  --connection-string "$AZURITE_CONNECTION_STRING" \
+  --overwrite true
 
 # Create blob containers
 az storage container create --name x12-mappings --account-name orderprocessingstorage

@@ -1,0 +1,11 @@
+.venv/
+venv/
+__pycache__/
+*.pyc
+local.settings.json
+.python_packages/
+__azurite_db_*.json
+__queuestorage__/
+__blobstorage__/
+__tablestorage__/
+.env

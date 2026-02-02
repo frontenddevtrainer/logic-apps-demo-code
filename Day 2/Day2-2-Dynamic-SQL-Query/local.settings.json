@@ -1,0 +1,12 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "POSTGRES_HOST": "your-postgres-server.postgres.database.azure.com",
+    "POSTGRES_DATABASE": "your-database",
+    "POSTGRES_USER": "your-username",
+    "POSTGRES_PASSWORD": "your-password",
+    "POSTGRES_PORT": "5432"
+  }
+}

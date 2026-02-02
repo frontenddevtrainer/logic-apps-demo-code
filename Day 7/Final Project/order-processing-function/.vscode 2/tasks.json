@@ -1,0 +1,60 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "func",
+            "label": "func: host start",
+            "command": "host start",
+            "problemMatcher": "$func-python-watch",
+            "isBackground": true,
+            "dependsOn": "pip install (functions)",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "pip install (functions)",
+            "type": "shell",
+            "osx": {
+                "command": "\"${workspaceFolder}/venv/bin/python\" -m pip install -r requirements.txt"
+            },
+            "windows": {
+                "command": "\"${workspaceFolder}\\venv\\Scripts\\python\" -m pip install -r requirements.txt"
+            },
+            "linux": {
+                "command": "\"${workspaceFolder}/venv/bin/python\" -m pip install -r requirements.txt"
+            },
+            "problemMatcher": [],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "Start Azurite",
+            "type": "shell",
+            "command": "npx azurite --location ./azurite --blobHost 127.0.0.1 --queueHost 127.0.0.1 --tableHost 127.0.0.1 --skipApiVersionCheck",
+            "isBackground": true,
+            "problemMatcher": [],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "Setup Azurite Containers",
+            "type": "shell",
+            "osx": {
+                "command": "\"${workspaceFolder}/venv/bin/python\" scripts/setup_azurite.py"
+            },
+            "windows": {
+                "command": "\"${workspaceFolder}\\venv\\Scripts\\python\" scripts\\setup_azurite.py"
+            },
+            "linux": {
+                "command": "\"${workspaceFolder}/venv/bin/python\" scripts/setup_azurite.py"
+            },
+            "problemMatcher": [],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        }
+    ]
+}
